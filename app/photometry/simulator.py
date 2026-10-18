@@ -115,3 +115,78 @@ def generate_synthetic_light_curve(
     flux_err = np.full(n_pts, snr_noise_sigma, dtype=np.float64)
 
     return time, flux, flux_err
+
+
+def inject_stellar_noise(
+    flux: np.ndarray,
+    noise_std: float = 0.0005,
+    random_seed: Optional[int] = None
+) -> np.ndarray:
+    """Inject zero-mean Gaussian white noise and optional micro-flares into flux."""
+    rng = np.random.RandomState(random_seed)
+    noise = rng.normal(0.0, noise_std, size=len(flux))
+    return flux + noise
+
+
+def simulate_transit_light_curve(
+    time: np.ndarray,
+    period: float,
+    epoch: float,
+    duration: float,
+    radius_ratio: float,
+    u1: float = 0.35,
+    u2: float = 0.20,
+    impact_parameter: float = 0.2,
+    noise_sigma: float = 0.0,
+    random_seed: Optional[int] = None
+) -> np.ndarray:
+    """Convenience helper to evaluate analytic transit model on an existing time grid."""
+    # Convert duration and impact parameter b to semi-major axis a/R_star and inclination
+    b = float(impact_parameter)
+    p = float(radius_ratio)
+    
+    # Duration ~ (P / pi) * (1 / (a/R)) * sqrt((1+p)^2 - b^2)
+    # => a/R = (P / (pi * duration)) * sqrt(max(0.01, (1+p)^2 - b^2))
+    geom_factor = np.sqrt(max(0.01, (1.0 + p) ** 2 - b ** 2))
+    a_over_r = max(2.5, (period / (np.pi * max(1e-4, duration))) * geom_factor)
+    cos_inc = np.clip(b / a_over_r, -1.0, 1.0)
+    inc_deg = float(np.degrees(np.arccos(cos_inc)))
+
+    # Compute phase and projected distance z
+    phases = ((time - epoch + 0.5 * period) % period) / period - 0.5
+    true_anom = 2.0 * np.pi * phases
+    inc_rad = np.radians(inc_deg)
+    x_proj = a_over_r * np.sin(true_anom)
+    y_proj = a_over_r * np.cos(true_anom) * np.cos(inc_rad)
+    z = np.sqrt(x_proj ** 2 + y_proj ** 2)
+
+    in_front = (np.cos(true_anom) >= 0.0) & (z < (1.0 + p))
+    flux = np.ones(len(time), dtype=np.float64)
+    p2 = p * p
+
+    for i in np.where(in_front)[0]:
+        zi = z[i]
+        if zi <= (1.0 - p):
+            mu = np.sqrt(np.maximum(0.0, 1.0 - zi ** 2))
+            c1 = 1.0 - u1 * (1.0 - mu) - u2 * ((1.0 - mu) ** 2)
+            c_norm = 1.0 - u1 / 3.0 - u2 / 6.0
+            depth_factor = (c1 / c_norm) if c_norm > 0 else 1.0
+            flux[i] = 1.0 - (p2 * depth_factor)
+        elif zi < (1.0 + p):
+            d1 = np.clip((1.0 - p2 + zi ** 2) / (2.0 * zi), -1.0, 1.0)
+            d2 = np.clip((p2 - 1.0 + zi ** 2) / (2.0 * zi * p), -1.0, 1.0)
+            area = (
+                np.arccos(d1)
+                - d1 * np.sqrt(np.maximum(0.0, 1.0 - d1 ** 2))
+                + p2 * np.arccos(d2)
+                - p * d2 * np.sqrt(np.maximum(0.0, 1.0 - d2 ** 2))
+            )
+            overlap_frac = np.clip(area / np.pi, 0.0, p2)
+            flux[i] = 1.0 - overlap_frac
+
+    if noise_sigma > 0.0:
+        rng = np.random.RandomState(random_seed)
+        flux += rng.normal(0.0, noise_sigma, size=len(flux))
+
+    return flux
+

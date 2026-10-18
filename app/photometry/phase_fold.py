@@ -6,7 +6,7 @@ Constructs:
 """
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Tuple
 import numpy as np
 
 from app.config import DEFAULT_PHOTOMETRY, PhotometryConfig
@@ -24,11 +24,22 @@ class DualViewProjection:
 def compute_dual_view_projection(
     time: np.ndarray,
     flux: np.ndarray,
-    period_days: float,
-    t0_days: float,
-    duration_days: float,
+    period_days: Optional[float] = None,
+    t0_days: Optional[float] = None,
+    duration_days: Optional[float] = None,
     config: PhotometryConfig = DEFAULT_PHOTOMETRY,
+    period: Optional[float] = None,
+    epoch: Optional[float] = None,
+    duration: Optional[float] = None,
 ) -> DualViewProjection:
+    period_days = period_days if period_days is not None else period
+    t0_days = t0_days if t0_days is not None else epoch
+    duration_days = duration_days if duration_days is not None else duration
+
+    if period_days is None or t0_days is None or duration_days is None:
+        raise ValueError("Must provide period_days, t0_days, and duration_days.")
+
+
     """Project phase-folded light curve into Global View and Local View representations.
 
     Parameters
@@ -116,3 +127,7 @@ def compute_dual_view_projection(
         global_phases=global_centers.astype(np.float32),
         local_phases=local_centers.astype(np.float32),
     )
+
+
+generate_dual_views = compute_dual_view_projection
+
