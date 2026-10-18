@@ -23,6 +23,15 @@ class BLSResult:
     periods: np.ndarray  # Period grid
     power: np.ndarray  # Spectral power at each test period
 
+    @property
+    def best_epoch(self) -> float:
+        return self.best_t0
+
+    @property
+    def sde(self) -> float:
+        return self.snr
+
+
 
 class BoxLeastSquaresEngine:
     """NumPy SIMD accelerated Box Least Squares periodogram engine."""
