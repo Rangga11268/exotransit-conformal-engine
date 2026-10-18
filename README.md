@@ -109,9 +109,12 @@ exotransit-conformal-engine/
 │   ├── schemas/                # Pydantic v2 validation models
 │   └── main.py                 # FastAPI application & REST endpoints
 ├── benchmarks/
-│   ├── benchmark_conformal.py  # Coverage vs SNR ablation & Pareto curves
-│   └── benchmark_latency.py    # Latency percentiles benchmark (P50/P90/P99)
-├── tests/                      # Automated test suite (18/18 passing)
+│   ├── benchmark_conformal.py      # Coverage vs SNR ablation & Pareto curves
+│   ├── benchmark_latency.py        # 50-trial CPU latency benchmark (P50/P90/P99)
+│   └── benchmark_nasa_empirical.py # Real NASA Kepler FITS download & full pipeline validation
+├── docs/
+│   └── MODEL_CARD.md           # Training provenance, metrics, limitations, conformal assumptions
+├── tests/                      # Automated test suite (19/19 passing)
 ├── index.html                  # Zero-dependency interactive HTML observatory GUI
 ├── demo.py                     # Single-command terminal verification walkthrough
 ├── run_tests.py                # Single-command test runner
@@ -139,3 +142,12 @@ uvicorn app.main:app --port 8000
 ```bash
 python run_tests.py
 ```
+
+### 4. NASA Kepler Empirical Benchmark (requires internet)
+Downloads real Kepler FITS photometry via lightkurve and runs the full pipeline against catalog ground-truth:
+```bash
+pip install lightkurve
+python benchmarks/benchmark_nasa_empirical.py
+# Results saved to benchmarks/nasa_empirical_results.json
+```
+

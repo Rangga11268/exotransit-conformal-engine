@@ -57,4 +57,9 @@ class HealthResponse(BaseModel):
     is_calibrated: bool
     active_q_hat: Optional[float]
     nominal_coverage: str
+    # Calibration provenance (Priority 3)
+    calibration_alpha: Optional[float] = None
+    calibration_n_samples: Optional[int] = None
+    calibration_source: Optional[str] = None
+    model_version: Optional[str] = None
 

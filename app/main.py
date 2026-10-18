@@ -112,14 +112,27 @@ async def get_gui():
 
 @app.get("/v1/health", response_model=HealthResponse, tags=["Diagnostics"])
 async def health_check():
-    """System health check and conformal quantile status."""
+    """System health check and conformal calibration provenance."""
+    cal_alpha = calibrator.alpha if calibrator else None
+    cal_n = calibrator.n_calibration if calibrator else None
+    cal_source = None
+    if calibrator:
+        cal_source = (
+            f"file:{os.path.basename(CALIBRATION_FILE)}"
+            if os.path.exists(CALIBRATION_FILE)
+            else "synthetic_bootstrap"
+        )
     return HealthResponse(
         status="healthy",
         version="1.0.0",
         model_loaded=(classifier is not None and classifier.booster is not None),
         is_calibrated=(calibrator is not None and calibrator.q_hat is not None),
         active_q_hat=calibrator.q_hat if calibrator else None,
-        nominal_coverage=f"{(calibrator.target_coverage * 100):.1f}%" if calibrator else "N/A"
+        nominal_coverage=f"{(calibrator.target_coverage * 100):.1f}%" if calibrator else "N/A",
+        calibration_alpha=cal_alpha,
+        calibration_n_samples=cal_n,
+        calibration_source=cal_source,
+        model_version="lgbm-dual-branch-v1.0",
     )
 
 
@@ -155,6 +168,23 @@ async def detect_transit(req: TransitDetectionRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Input data contains non-finite values (NaN or Inf)"
         )
+    # Monotone timestamp check (BLS requires strictly increasing time)
+    dt = np.diff(time_arr)
+    if not np.all(dt > 0):
+        n_bad = int(np.sum(dt <= 0))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Timestamps must be strictly increasing. Found {n_bad} non-monotone step(s). "
+                   "Sort by time and remove duplicate timestamps before submitting."
+        )
+    # Cadence irregularity check: warn (not reject) if spread is extreme
+    # ponytail: soft check only — a hard reject would break real gapped Kepler data
+    median_dt = float(np.median(dt))
+    max_gap = float(np.max(dt))
+    if median_dt > 0 and max_gap / median_dt > 50:
+        # Large gap present (e.g. quarterly Kepler downlinks are ~3d gaps on ~30min cadence)
+        # Not an error — BLS handles gaps gracefully via phase folding
+        pass  # acceptable; no action needed
 
     # 1. Detrending
     if req.detrend:

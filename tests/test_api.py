@@ -105,6 +105,25 @@ class TestMilestone4API:
         resp3 = client.post("/v1/transit/detect", json={"time": [1.0]*60, "flux": [1.0]*59 + [None]})
         assert resp3.status_code == 422 # Pydantic schema validation error
 
+        # 4. Non-monotone timestamps (Priority 4)
+        t_bad = list(range(60))
+        t_bad[30] = 10  # insert backward step
+        resp4 = client.post("/v1/transit/detect", json={"time": t_bad, "flux": [1.0]*60})
+        assert resp4.status_code == 400
+        assert "monotone" in resp4.json()["detail"].lower()
+
+    def test_health_calibration_provenance(self, client):
+        """GET /v1/health must expose calibration alpha, n_samples, source, and model_version."""
+        resp = client.get("/v1/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["calibration_alpha"] is not None
+        assert abs(data["calibration_alpha"] - 0.05) < 1e-4, "Alpha must be 0.05 (default)"
+        assert data["calibration_n_samples"] is not None
+        assert data["calibration_n_samples"] >= 100
+        assert data["calibration_source"] is not None
+        assert data["model_version"] == "lgbm-dual-branch-v1.0"
+
     def test_recalibrate_endpoint(self, client):
         """POST /v1/conformal/calibrate must update error rate and return acknowledgment."""
         payload = {
