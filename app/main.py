@@ -255,3 +255,16 @@ async def calibrate_engine(req: CalibrateRequest):
         target_coverage=round(1.0 - req.alpha, 4),
         n_calibration=len(y)
     )
+
+
+@app.get("/v1/nasa/benchmarks", tags=["NASA Empirical Data"])
+async def get_nasa_benchmarks():
+    """Retrieve curated NASA Kepler archive benchmark targets for empirical validation."""
+    from app.data.nasa_samples import NASA_KEPLER_BENCHMARKS
+    return {
+        "status": "success",
+        "total_targets": len(NASA_KEPLER_BENCHMARKS),
+        "source": "NASA Exoplanet Archive (IPAC/Caltech) Cumulative Table",
+        "benchmarks": NASA_KEPLER_BENCHMARKS
+    }
+
