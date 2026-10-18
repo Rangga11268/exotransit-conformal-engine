@@ -23,17 +23,24 @@ from app.models.classifier import DualBranchClassifier
 from app.conformal.calibrator import SplitConformalCalibrator
 
 
-def run_latency_benchmark(n_trials: int = 20) -> dict:
+import platform
+
+def run_latency_benchmark(n_trials: int = 50, n_warmup: int = 10) -> dict:
     print("=" * 70, flush=True)
     print(">>> EXOTRANSIT-CONFORMAL: END-TO-END CPU LATENCY BENCHMARK <<<", flush=True)
+    print(f"Platform: {platform.system()} {platform.release()} ({platform.machine()})", flush=True)
+    print(f"Python: {platform.python_version()}", flush=True)
     print("=" * 70, flush=True)
-
 
     # Initialize engines
     bls_engine = BoxLeastSquaresEngine()
     classifier = DualBranchClassifier()
-    calibrator = SplitConformalCalibrator(nominal_error_rate=0.05)
-    calibrator.q_hat = 0.42 # calibrated default
+    cal_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "conformal_calibration.json")
+    if os.path.exists(cal_file):
+        calibrator = SplitConformalCalibrator.load(cal_file, expected_alpha=0.05)
+    else:
+        calibrator = SplitConformalCalibrator(nominal_error_rate=0.05)
+        calibrator.q_hat = 0.1095
 
     # Prepare standard 30-day Kepler cadence light curve (~1,470 photometric points)
     cadence_days = 29.4 / (24.0 * 60.0)
@@ -51,11 +58,11 @@ def run_latency_benchmark(n_trials: int = 20) -> dict:
     flux_arr = inject_stellar_noise(raw_flux, noise_std=3e-4, random_seed=42)
 
     print(f"Photometric points per trial: {len(time_arr):,}")
-    print(f"Benchmark trials: {n_trials}")
+    print(f"Benchmark trials: {n_trials} (Warmup trials: {n_warmup})")
     print("Warming up JIT & memory caches...")
 
     # Warmup
-    for _ in range(5):
+    for _ in range(n_warmup):
         clean_flux = robust_detrend_flux(time_arr, flux_arr)
         bls_res = bls_engine.search(time_arr, clean_flux)
         views = compute_dual_view_projection(time_arr, clean_flux, bls_res.best_period, bls_res.best_t0, bls_res.best_duration)

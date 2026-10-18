@@ -262,11 +262,17 @@ class SplitConformalCalibrator:
             json.dump(data, f, indent=2)
 
     @classmethod
-    def load(cls, filepath: str) -> "SplitConformalCalibrator":
-        """Loads calibrator from saved JSON file."""
+    def load(cls, filepath: str, expected_alpha: Optional[float] = None) -> "SplitConformalCalibrator":
+        """Loads calibrator from saved JSON file, optionally verifying expected alpha."""
         with open(filepath, "r") as f:
             data = json.load(f)
-        cal = cls(nominal_error_rate=data["alpha"])
+        saved_alpha = float(data["alpha"])
+        if expected_alpha is not None and abs(saved_alpha - expected_alpha) > 1e-4:
+            raise ValueError(
+                f"Calibration alpha mismatch: file contains alpha={saved_alpha} "
+                f"(coverage {1-saved_alpha:.1%}), expected alpha={expected_alpha} ({1-expected_alpha:.1%})"
+            )
+        cal = cls(nominal_error_rate=saved_alpha)
         cal.q_hat = data["q_hat"]
         cal.n_calibration = data["n_calibration"]
         if data.get("calibration_scores"):

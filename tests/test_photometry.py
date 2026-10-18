@@ -36,6 +36,11 @@ class TestMilestone1Photometry:
         min_flux = np.min(flux)
         assert min_flux < 0.995
 
+        # Verify flux_err semantic correctness: positive, matches noise sigma, distinct from flux
+        assert np.all(flux_err > 0.0)
+        assert np.allclose(flux_err, 0.0005)
+        assert not np.array_equal(flux, flux_err)
+
     def test_robust_detrending_preserves_transit(self):
         """Detrending removes low frequency sine modulation without erasing transit depth."""
         time = np.linspace(0.0, 30.0, 1500)

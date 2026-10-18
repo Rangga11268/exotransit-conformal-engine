@@ -33,12 +33,14 @@ bls_engine: Optional[BoxLeastSquaresEngine] = None
 CALIBRATION_FILE = os.path.join(os.path.dirname(__file__), "conformal_calibration.json")
 
 
-def _bootstrap_calibrator(alpha: float = 0.05, n_samples: int = 250) -> SplitConformalCalibrator:
-    """Helper to ensure a calibrated conformal layer is always ready."""
+def _bootstrap_calibrator(alpha: float = 0.05, n_samples: int = 500) -> SplitConformalCalibrator:
+    """Helper to ensure a calibrated conformal layer matching target alpha is ready."""
     cal = SplitConformalCalibrator(nominal_error_rate=alpha)
     if os.path.exists(CALIBRATION_FILE):
         try:
-            return SplitConformalCalibrator.load(CALIBRATION_FILE)
+            loaded_cal = SplitConformalCalibrator.load(CALIBRATION_FILE, expected_alpha=alpha)
+            if loaded_cal.n_calibration >= 100:
+                return loaded_cal
         except Exception:
             pass
 
@@ -243,10 +245,12 @@ async def calibrate_engine(req: CalibrateRequest):
     probs = classifier.predict_proba_from_features(X)
     q_hat = cal.calibrate(probs, y)
     calibrator = cal
-    try:
-        cal.save(CALIBRATION_FILE)
-    except Exception:
-        pass
+    # Only persist to default file if recalibrated with default nominal error rate
+    if abs(req.alpha - 0.05) < 1e-4:
+        try:
+            cal.save(CALIBRATION_FILE)
+        except Exception:
+            pass
 
     return CalibrateResponse(
         status="recalibrated_successfully",

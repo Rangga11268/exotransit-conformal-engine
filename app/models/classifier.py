@@ -40,7 +40,8 @@ def generate_synthetic_dataset(n_samples: int = 600, random_seed: int = 42) -> T
         
         if is_planet:
             # Genuine exoplanet: U-shape Mandel-Agol, no secondary eclipse
-            radius_ratio = rng.uniform(0.015, 0.08)  # ~1.5% to 8% stellar radius
+            # Covers rocky super-Earths to Jupiter gas giants (1.2% to 12.0% stellar radius)
+            radius_ratio = rng.uniform(0.012, 0.12)
             duration = rng.uniform(0.05, 0.25)
             u1, u2 = 0.3, 0.2
             

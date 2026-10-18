@@ -41,13 +41,13 @@ Sistem ini dirancang untuk mendeteksi kandidat eksoplanet dari kurva cahaya foto
 * **Analytic Transit Simulator**:
   - Generator kurva cahaya sintetis menggunakan aproksimasi analitik Mandel-Agol dengan variasi rasio $R_p/R_\star$, limb darkening quadratic $(u_1, u_2)$, dan injeksi white Gaussian noise serta flare Poisson acak untuk pengujian ketahanan (*robustness testing*).
 
-### R2. Deep Learning Classification Architecture (`app/models/`)
-* **Multi-Scale 1D Dilated Residual Network**:
-  - Menggunakan dua cabang konvolusi paralel (Global Branch & Local Branch) yang masing-masing memanfaatkan *dilated causal/symmetric convolutions* (dilation rate $1, 2, 4, 8$) dan residual skip connections.
-  - Fusion layer yang menggabungkan representasi laten kedua cabang menjadi embedding vektor $\mathbf{z} \in \mathbb{R}^{64}$.
-  - Dense classification head dengan softmax output $\hat{f}(X) \in [0, 1]^2$ (Kelas 0: False Positive / Stellar Noise, Kelas 1: Verified Exoplanet Transit).
+### R2. Dual-Branch Morphological Classification Architecture (`app/models/`)
+* **Multi-Scale Dilated 1D Morphological Extractor**:
+  - Menggunakan dua cabang representasi paralel (Global Branch & Local Branch) yang memanfaatkan *dilated convolution filters* (dilation rate 1, 2, 4, 8) dan scientific pooling untuk mengekstraksi gradien, kelengkungan limb darkening (U-shape vs V-shape), serta rasio kedalaman gerhana sekunder.
+  - Vektor fitur gabungan berdimensi 43 ($\mathbf{z} \in \mathbb{R}^{43}$) yang mencakup morfologi global (16 fitur konvolusi + 6 indikator astrofisika), morfologi lokal (12 fitur konvolusi + 4 shape tests), dan 5 skalar BLS (periode, durasi, kedalaman, SDE, duty cycle).
+  - Head klasifikasi berbasis LightGBM Gradient Boosted Decision Trees yang sangat cepat di CPU dengan probabilitas output $\hat{f}(X) \in [0, 1]^2$ (Kelas 0: False Positive / Stellar Noise, Kelas 1: Verified Exoplanet Transit).
 * **Lightweight CPU Footprint**:
-  - Model PyTorch dioptimalkan untuk inferensi CPU dengan parameter $< 250.000$, memori footprint $< 120\text{ MB}$, dan latensi forward pass $< 8\text{ms}$.
+  - Dioptimalkan untuk inferensi CPU tanpa runtime PyTorch/CUDA yang berat, dengan model size $< 200\text{ KB}$, memori footprint $< 25\text{ MB}$, dan latensi forward pass $< 5\text{ ms}$.
 
 ### R3. Split Conformal Prediction Engine (`app/conformal/`)
 * **Non-Conformity Scoring Function**:
