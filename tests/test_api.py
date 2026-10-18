@@ -46,6 +46,14 @@ class TestMilestone4API:
         assert data["engine"] == "ExoTransit-Conformal"
         assert data["status"] == "operational"
 
+    def test_gui_endpoint(self, client):
+        """GET /gui must serve the index.html GUI with 200 OK."""
+        resp = client.get("/gui")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+        assert "ExoTransit-Conformal Engine" in resp.text
+
+
     def test_health_endpoint(self, client):
         """GET /v1/health must report model loaded and calibrated status."""
         resp = client.get("/v1/health")

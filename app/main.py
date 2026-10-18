@@ -6,7 +6,9 @@ from contextlib import asynccontextmanager
 from typing import Optional
 import numpy as np
 from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+
 
 from app.schemas.transit import (
     TransitDetectionRequest,
@@ -81,6 +83,9 @@ app.add_middleware(
 )
 
 
+INDEX_HTML = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "index.html")
+
+
 @app.get("/", tags=["General"])
 async def root():
     """Engine root metadata."""
@@ -88,9 +93,19 @@ async def root():
         "engine": "ExoTransit-Conformal",
         "description": "Finite-sample error-guaranteed exoplanet transit detection",
         "status": "operational",
+        "gui_url": "/gui",
         "docs_url": "/docs",
         "version": "1.0.0"
     }
+
+
+@app.get("/gui", tags=["General"])
+async def get_gui():
+    """Serves pure HTML/CSS/JS observatory dashboard."""
+    if os.path.exists(INDEX_HTML):
+        return FileResponse(INDEX_HTML, media_type="text/html")
+    raise HTTPException(status_code=404, detail="index.html not found")
+
 
 
 @app.get("/v1/health", response_model=HealthResponse, tags=["Diagnostics"])
