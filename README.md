@@ -1,11 +1,19 @@
-# ExoTransit-Conformal: Finite-Sample Error-Guaranteed Exoplanet Transit Detection Engine
+<p align="center">
+  <img src="assets/logo.svg" alt="ExoTransit-Conformal Engine Logo" width="140" height="140">
+</p>
 
-Vectorized Box Least Squares (BLS) photometry and distribution-free Split Conformal Prediction engine with finite-sample error guarantees ($1 - \alpha$) for exoplanet transit discovery on NASA Kepler & TESS light curves.
+<h1 align="center">ExoTransit-Conformal</h1>
+<p align="center">
+  <strong>Finite-Sample Error-Guaranteed Exoplanet Transit Detection Engine</strong><br>
+  <em>Vectorized Box Least Squares (BLS) photometry and distribution-free Split Conformal Prediction engine with finite-sample error guarantees ($1 - \alpha$) for exoplanet transit discovery on NASA Kepler & TESS light curves.</em>
+</p>
 
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg)](https://fastapi.tiangolo.com/)
-[![Conformal Prediction](https://img.shields.io/badge/Coverage-95%25%20Guaranteed-success.svg)](https://arxiv.org/abs/2107.07511)
-[![Cross-Platform CPU](https://img.shields.io/badge/Cross--Platform-CPU%20Native-blueviolet.svg)]()
+<p align="center">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.12-blue.svg" alt="Python 3.12"></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.111-009688.svg" alt="FastAPI"></a>
+  <a href="https://arxiv.org/abs/2107.07511"><img src="https://img.shields.io/badge/Coverage-95%25%20Guaranteed-success.svg" alt="Conformal Prediction"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Cross--Platform-CPU%20Native-blueviolet.svg" alt="Cross-Platform CPU"></a>
+</p>
 
 > **Production-grade scientific machine learning engine combining vectorized Box Least Squares (BLS) photometry, multi-scale dual-branch feature extraction, and distribution-free Split Conformal Prediction for robust exoplanet discovery on NASA Kepler and TESS light curves.**
 
@@ -24,41 +32,46 @@ In real astronomical research, ground-based follow-up telescope time (e.g., Keck
 
 ---
 
-## 📐 Architecture & Mathematical Flow
+## 📐 Architecture & Mathematical Dataflow
 
-```
-                      [ Raw NASA Photometric Light Curve ]
-                                       │
-                                       ▼
-                   [ Vectorized Box Least Squares (BLS) ]
-                   Finds: Period P, Epoch t0, Duration q
-                                       │
-                                       ▼
-                    [ Robust Detrending & Phase-Folding ]
-                    Filters long-term stellar variability
-                                       │
-                      ┌────────────────┴────────────────┐
-                      ▼                                 ▼
-             [ Global View: 2001 bins ]       [ Local View: 201 bins ]
-             Checks secondary eclipses        Captures limb darkening
-                      └────────────────┬────────────────┘
-                                       │
-                                       ▼
-                 [ Dual-Branch Multi-Scale Classifier ]
-                     (Global & Local View Feature Extraction)
-                                       │
-                                       ▼
-                   [ Split Conformal Calibration Layer ]
-                     Computes non-conformity residuals
-                     Derives finite-sample quantile q̂
-                                       │
-                                       ▼
-                     [ Conformal Prediction Set C(X) ]
-           ┌───────────────────────────┼───────────────────────────┐
-           ▼                           ▼                           ▼
-    { Planet }               { False Positive }        { Planet, FP }
- High-Confidence Discovery    Stellar Noise / EB      Ambiguous Low SNR
- (Safe for JWST Follow-up)       (Discarded)         (Flagged for Review)
+```mermaid
+flowchart TD
+    subgraph S1["1. Photometry Pipeline (NumPy SIMD)"]
+        LC["Raw NASA Stellar Light Curve<br/>(Kepler / TESS Flux Time-Series)"] --> BLS["Vectorized BLS Periodogram<br/>(Period P, Epoch t0, Duration q)"]
+        BLS --> DET["Running Median Detrending & Phase-Folding<br/>(Eliminates Stellar Rotation & Variability)"]
+    end
+
+    subgraph S2["2. Dual-Branch Spatial Projection"]
+        DET --> GV["Global View (2,001 Bins)<br/>Full Orbit [-0.5, +0.5]<br/>Scans for Secondary Eclipses"]
+        DET --> LV["Local View (201 Bins)<br/>Transit Center [-2x, +2x Duration]<br/>Captures Mandel-Agol Limb Darkening"]
+    end
+
+    subgraph S3["3. Scientific ML Inference"]
+        GV & LV --> FE["Multi-Scale Feature Extractor<br/>(43 Dilated Morphological & BLS Features)"]
+        FE --> CLF["Dual-Branch LightGBM Classifier<br/>(P99 Latency &lt; 4.0 ms on CPU)"]
+        CLF --> PROBS["Raw Softmax Probabilities<br/>P(Planet), P(False Positive)"]
+    end
+
+    subgraph S4["4. Distribution-Free Conformal Calibration"]
+        PROBS --> CAL["Split Conformal Calibration Layer<br/>(Quantile q̂ at 1 - α Finite-Sample Level)"]
+        CAL --> SET["Conformal Prediction Set C(X)<br/>P(Y ∈ C(X)) ≥ 1 - α"]
+    end
+
+    subgraph S5["5. Three-Tier Decision Routing"]
+        SET -->|High Confidence Discovery| DEC_PLANET["Singleton: { Planet }<br/>Directly Scheduled for JWST / Keck Follow-up"]
+        SET -->|Borderline SNR / Ambiguous Signal| DEC_AMBIG["Ambiguous Set: { Planet, False Positive }<br/>Routed to Expert Astronomer Review Queue"]
+        SET -->|Binary Eclipse / Stellar Noise| DEC_FP["Singleton: { False Positive }<br/>Eliminated from Exoplanet Catalog"]
+    end
+
+    classDef stage fill:#121826,stroke:#1e293b,stroke-width:1px,color:#f1f5f9;
+    classDef planet fill:#064e3b,stroke:#10b981,stroke-width:1.5px,color:#ecfdf5;
+    classDef ambig fill:#78350f,stroke:#f59e0b,stroke-width:1.5px,color:#fef3c7;
+    classDef fp fill:#1e293b,stroke:#64748b,stroke-width:1.5px,color:#cbd5e1;
+
+    class LC,BLS,DET,GV,LV,FE,CLF,PROBS,CAL,SET stage;
+    class DEC_PLANET planet;
+    class DEC_AMBIG ambig;
+    class DEC_FP fp;
 ```
 
 ---

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ExoTransit-Conformal Engine | Observatorium Deteksi Eksoplanet NASA</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -60,27 +61,16 @@
     .brand {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
     }
 
-    .brand-icon {
-      width: 40px;
-      height: 40px;
-      background: radial-gradient(circle at 30% 30%, #38bdf8, #0369a1);
-      border-radius: 50%;
-      box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
-      position: relative;
-    }
-
-    .brand-icon::after {
-      content: '';
-      position: absolute;
-      width: 14px;
-      height: 14px;
-      background: #0b0f19;
-      border-radius: 50%;
-      top: 13px;
-      left: 13px;
+    .brand-logo-img {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      display: block;
     }
 
     .brand-text h1 {
@@ -512,7 +502,7 @@
   <div class="container">
     <header>
       <div class="brand">
-        <div class="brand-icon"></div>
+        <img src="assets/logo.svg" alt="ExoTransit-Conformal Logo" class="brand-logo-img">
         <div class="brand-text">
           <h1>ExoTransit-Conformal Engine</h1>
           <p>Observatorium Fotometri BLS & Split Conformal Prediction Garansi Matematis 95%</p>
