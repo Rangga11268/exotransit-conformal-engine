@@ -1,0 +1,5 @@
+# Enforce LF normalization across git checkouts for LightGBM model files
+*.txt text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf

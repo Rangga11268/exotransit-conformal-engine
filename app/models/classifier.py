@@ -148,7 +148,11 @@ class DualBranchClassifier:
         self.booster: Optional[lgb.Booster] = None
         
         if model_path and os.path.exists(model_path):
-            self.booster = lgb.Booster(model_file=model_path)
+            # Read model file and normalize CRLF to LF to prevent LightGBM C-parser
+            # abort on Windows when git checkout applies CRLF conversions
+            with open(model_path, "r", encoding="utf-8") as f:
+                model_str = f.read().replace("\r\n", "\n")
+            self.booster = lgb.Booster(model_str=model_str)
         else:
             self.train_and_save(model_path)
 
