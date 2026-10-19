@@ -68,13 +68,28 @@ class BoxLeastSquaresEngine:
         BLSResult
             Identified optimal period, epoch, duration, depth, and periodogram.
         """
-        # Ensure zero-mean centered flux for Kovacs formulation
-        mean_flux = np.nanmedian(flux)
-        y = (flux - mean_flux).astype(np.float64)
-        t = time.astype(np.float64)
+        t = np.asarray(time, dtype=np.float64).ravel()
+        f = np.asarray(flux, dtype=np.float64).ravel()
+        if len(t) < 3:
+            raise ValueError(f"Light curve time series must contain at least 3 points, got {len(t)}")
+        if len(t) != len(f):
+            raise ValueError(f"Length mismatch between time ({len(t)}) and flux ({len(f)})")
+        if not np.all(np.isfinite(t)):
+            raise ValueError("Observation time array contains NaN or Inf values")
+        if not np.all(np.isfinite(f)):
+            raise ValueError("Photometric flux array contains NaN or Inf values")
+        if np.any(np.diff(t) <= 0):
+            raise ValueError("Observation time array must be strictly monotonic increasing")
 
         if flux_err is not None:
-            weights = 1.0 / np.maximum(1e-8, flux_err.astype(np.float64) ** 2)
+            fe = np.asarray(flux_err, dtype=np.float64).ravel()
+            if len(fe) != len(t):
+                raise ValueError(f"Length mismatch between time ({len(t)}) and flux_err ({len(fe)})")
+            if not np.all(np.isfinite(fe)):
+                raise ValueError("Photometric flux_err array contains NaN or Inf values")
+            if np.any(fe <= 0):
+                raise ValueError("Photometric flux_err values must be strictly positive")
+            weights = 1.0 / np.maximum(1e-8, fe ** 2)
             weights /= np.sum(weights)
         else:
             weights = np.full(len(t), 1.0 / len(t), dtype=np.float64)
@@ -88,13 +103,24 @@ class BoxLeastSquaresEngine:
                 dtype=np.float64,
             )
         else:
-            periods = np.asarray(period_grid, dtype=np.float64)
+            periods = np.asarray(period_grid, dtype=np.float64).ravel()
+            if len(periods) == 0:
+                raise ValueError("period_grid cannot be empty")
+            if not np.all(np.isfinite(periods)) or np.any(periods <= 0):
+                raise ValueError("period_grid values must be positive and finite")
 
         dur_fractions = (
             self.config.duration_fractions
             if duration_grid is None
             else tuple(duration_grid)
         )
+        if any(q <= 0 or q >= 1.0 for q in dur_fractions):
+            raise ValueError("duration_grid fractions must be strictly in (0.0, 1.0)")
+
+        # Ensure zero-mean centered flux for Kovacs formulation
+        mean_flux = float(np.median(f))
+        y = f - mean_flux
+
 
         n_periods = len(periods)
         power_spectrum = np.zeros(n_periods, dtype=np.float64)

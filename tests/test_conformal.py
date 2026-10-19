@@ -121,3 +121,45 @@ class TestMilestone3Conformal:
         uncal = SplitConformalCalibrator(nominal_error_rate=0.05)
         with pytest.raises(RuntimeError):
             uncal.predict_set(np.array([[0.5, 0.5]]))
+
+    def test_conformal_small_sample_infinite_quantile(self):
+        """When calibration set is too small to mathematically satisfy nominal coverage (k > n),
+        q_hat must be set to infinity and prediction sets must cover all classes."""
+        # n = 5 samples, alpha = 0.05 -> ceil(6 * 0.95) = 6 > 5
+        small_probs = np.array([
+            [0.1, 0.9],
+            [0.8, 0.2],
+            [0.15, 0.85],
+            [0.9, 0.1],
+            [0.05, 0.95],
+        ])
+        small_labels = np.array([1, 0, 1, 0, 1])
+
+        calibrator = SplitConformalCalibrator(nominal_error_rate=0.05)
+        q_hat = calibrator.calibrate(small_probs, small_labels)
+
+        assert np.isinf(q_hat), f"Expected q_hat=inf when k > n, got {q_hat}"
+
+        test_p = np.array([[0.01, 0.99], [0.99, 0.01]])
+        sets = calibrator.predict_set(test_p)
+        assert len(sets) == 2
+        for s in sets:
+            assert s.status == STATUS_AMBIGUOUS
+            assert set(s.prediction_set) == {"FALSE_POSITIVE", "PLANET"}
+
+    def test_conformal_strict_input_validation(self):
+        """Rejects illegal labels (e.g. -1), NaNs, and probabilities outside [0, 1]."""
+        calibrator = SplitConformalCalibrator(nominal_error_rate=0.05)
+
+        # Illegal label -1
+        with pytest.raises(ValueError, match="strictly binary"):
+            calibrator.calibrate(np.array([[0.5, 0.5]]), np.array([-1]))
+
+        # NaN probabilities
+        with pytest.raises(ValueError, match="finite"):
+            calibrator.calibrate(np.array([[np.nan, 0.5]]), np.array([0]))
+
+        # Out-of-bounds probability > 1.0
+        with pytest.raises(ValueError, match="in \\[0.0, 1.0\\]"):
+            calibrator.calibrate(np.array([[1.5, -0.5]]), np.array([0]))
+

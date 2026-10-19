@@ -102,6 +102,13 @@ class SplitConformalCalibrator:
         if n == 0:
             raise ValueError("Calibration set cannot be empty.")
 
+        if not np.all(np.isfinite(probs)):
+            raise ValueError("probabilities must contain only finite numbers (no NaN or Inf)")
+        if np.any(probs < 0.0) or np.any(probs > 1.0):
+            raise ValueError("probabilities values must be strictly in [0.0, 1.0]")
+        if not np.all(np.isin(labels, [0, 1])):
+            raise ValueError(f"ground_truth labels must be strictly binary (0 or 1), got invalid labels: {np.unique(labels)}")
+
         # Compute true class probabilities
         true_class_probs = probs[np.arange(n), labels]
         # Non-conformity scores: s_i = 1 - P(Y_i | X_i)
@@ -109,12 +116,17 @@ class SplitConformalCalibrator:
         self.calibration_scores = np.sort(scores)
         self.n_calibration = n
 
-        # Conformal finite-sample quantile index: ceil((n + 1) * (1 - alpha)) / n
-        level = np.ceil((n + 1) * (1.0 - self.alpha)) / n
-        level = min(1.0, max(0.0, level))
+        # Conformal finite-sample quantile index: k = ceil((n + 1) * (1 - alpha))
+        # In distribution-free conformal prediction, if k > n, nominal (1 - alpha) coverage
+        # cannot be guaranteed by any finite score threshold, so q_hat is set to infinity.
+        k = int(np.ceil((n + 1) * (1.0 - self.alpha)))
+        if k > n:
+            self.q_hat = float("inf")
+        else:
+            level = k / float(n)
+            level = min(1.0, max(0.0, level))
+            self.q_hat = float(np.quantile(self.calibration_scores, level, method="higher"))
 
-        # Quantile with higher method to ensure finite sample guarantee
-        self.q_hat = float(np.quantile(self.calibration_scores, level, method="higher"))
         return self.q_hat
 
     def predict_set(
@@ -146,12 +158,16 @@ class SplitConformalCalibrator:
             probs = probs.reshape(1, -1)
         if probs.shape[1] != 2:
             raise ValueError(f"Expected shape (*, 2), got {probs.shape}")
+        if not np.all(np.isfinite(probs)):
+            raise ValueError("probabilities must contain only finite numbers (no NaN or Inf)")
+        if np.any(probs < 0.0) or np.any(probs > 1.0):
+            raise ValueError("probabilities values must be strictly in [0.0, 1.0]")
 
         m = len(probs)
         if candidate_ids is None:
             candidate_ids = [f"KOI-{i+1:04d}" for i in range(m)]
 
-        cutoff = 1.0 - self.q_hat
+        cutoff = 1.0 - self.q_hat if np.isfinite(self.q_hat) else -float("inf")
         results = []
 
         for i in range(m):
@@ -160,17 +176,22 @@ class SplitConformalCalibrator:
             cid = candidate_ids[i]
             snr_val = snrs[i] if (snrs is not None and i < len(snrs)) else None
 
-            # Label y is included if: P(y | X) >= 1 - q_hat
-            prediction_set = []
-            if p_fp >= cutoff:
-                prediction_set.append("FALSE_POSITIVE")
-            if p_planet >= cutoff:
-                prediction_set.append("PLANET")
-
-            # If neither class exceeds cutoff (uncertain/boundary candidate where model confidence is split),
-            # this represents maximum uncertainty -> both classes included for manual review
-            if len(prediction_set) == 0:
+            if np.isinf(self.q_hat):
+                # When q_hat is infinite (e.g. calibration set too small for alpha), all labels included
                 prediction_set = ["FALSE_POSITIVE", "PLANET"]
+            else:
+                # Label y is included if: P(y | X) >= 1 - q_hat
+                prediction_set = []
+                if p_fp >= cutoff:
+                    prediction_set.append("FALSE_POSITIVE")
+                if p_planet >= cutoff:
+                    prediction_set.append("PLANET")
+
+                # If neither class exceeds cutoff (uncertain/boundary candidate where model confidence is split),
+                # this represents maximum uncertainty -> both classes included for manual review
+                if len(prediction_set) == 0:
+                    prediction_set = ["FALSE_POSITIVE", "PLANET"]
+
 
             # Determine routing status
             k = len(prediction_set)

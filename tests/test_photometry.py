@@ -141,3 +141,32 @@ class TestMilestone1Photometry:
         assert result.sde > 3.0, f"Kovacs SDE should be significantly elevated for clear transit: {result.sde}"
         assert result.sde_val is not None
         assert np.isfinite(result.sde)
+
+    def test_bls_input_validation_guards(self):
+        """BLS rejects malformed time, flux, flux_err arrays and invalid period grids."""
+        engine = BoxLeastSquaresEngine()
+
+        # Less than 3 points
+        with pytest.raises(ValueError, match="at least 3 points"):
+            engine.search(np.array([1.0, 2.0]), np.array([1.0, 0.9]))
+
+        # Length mismatch
+        with pytest.raises(ValueError, match="Length mismatch between time"):
+            engine.search(np.array([1.0, 2.0, 3.0]), np.array([1.0, 0.9]))
+
+        # Non-monotonic time
+        with pytest.raises(ValueError, match="strictly monotonic"):
+            engine.search(np.array([1.0, 3.0, 2.0]), np.array([1.0, 0.9, 1.0]))
+
+        # NaN in flux
+        with pytest.raises(ValueError, match="NaN or Inf"):
+            engine.search(np.array([1.0, 2.0, 3.0]), np.array([1.0, np.nan, 1.0]))
+
+        # Negative flux_err
+        with pytest.raises(ValueError, match="strictly positive"):
+            engine.search(np.array([1.0, 2.0, 3.0]), np.array([1.0, 0.9, 1.0]), flux_err=np.array([0.1, -0.1, 0.1]))
+
+        # Empty period grid
+        with pytest.raises(ValueError, match="cannot be empty"):
+            engine.search(np.array([1.0, 2.0, 3.0]), np.array([1.0, 0.9, 1.0]), period_grid=np.array([]))
+
