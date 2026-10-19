@@ -36,24 +36,29 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run automated test suite
+        env:
+          PYTHONPATH: .
+          CI: "true"
         run: |
-          python -c "
-          import subprocess, sys
-          p = subprocess.run([sys.executable, 'run_tests.py'], capture_output=True, text=True)
-          print(p.stdout)
-          if p.stderr:
-              print('STDERR:\n', p.stderr)
-          sys.exit(p.returncode)
-          "
+          python run_tests.py
 
       - name: Run interactive terminal demo
+        env:
+          PYTHONPATH: .
+          CI: "true"
         run: |
           python demo.py
 
       - name: Run conformal coverage & SNR ablation benchmark
+        env:
+          PYTHONPATH: .
+          CI: "true"
         run: |
           python benchmarks/benchmark_conformal.py
 
       - name: Run CPU inference latency benchmark
+        env:
+          PYTHONPATH: .
+          CI: "true"
         run: |
           python benchmarks/benchmark_latency.py
