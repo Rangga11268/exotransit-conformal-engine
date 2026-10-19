@@ -22,6 +22,7 @@ class BLSResult:
     snr: float  # Transit Signal-to-Noise Ratio
     periods: np.ndarray  # Period grid
     power: np.ndarray  # Spectral power at each test period
+    sde_val: Optional[float] = None  # Kovacs (2002) Signal Detection Efficiency
 
     @property
     def best_epoch(self) -> float:
@@ -29,7 +30,7 @@ class BLSResult:
 
     @property
     def sde(self) -> float:
-        return self.snr
+        return self.sde_val if self.sde_val is not None else self.snr
 
 
 
@@ -118,11 +119,15 @@ class BoxLeastSquaresEngine:
             bin_y = np.bincount(bin_indices, weights=y * weights, minlength=n_phase_bins)
             bin_w = np.bincount(bin_indices, weights=weights, minlength=n_phase_bins)
 
-            # Circular prefix sum for fast box sliding
-            cum_y = np.concatenate([[0.0], np.cumsum(bin_y)])
-            cum_w = np.concatenate([[0.0], np.cumsum(bin_w)])
-            total_y = cum_y[-1]
-            total_w = cum_w[-1]
+            # Circular wrap-around for box sliding over phase boundary [0, 1)
+            # By concatenating bins, a box spanning past index (n_phase_bins - 1) wraps into index 0
+            bin_y_circ = np.concatenate([bin_y, bin_y])
+            bin_w_circ = np.concatenate([bin_w, bin_w])
+
+            cum_y = np.concatenate([[0.0], np.cumsum(bin_y_circ)])
+            cum_w = np.concatenate([[0.0], np.cumsum(bin_w_circ)])
+            total_y = float(np.sum(bin_y))
+            total_w = float(np.sum(bin_w))
 
             peak_sr_period = -1.0
             peak_phase_idx = 0
@@ -134,10 +139,9 @@ class BoxLeastSquaresEngine:
                 if k_bins >= n_phase_bins:
                     continue
 
-                # Sliding box over phase bins
-                # in-transit sums:
-                s_in = cum_y[k_bins:] - cum_y[:-k_bins]
-                r_in = cum_w[k_bins:] - cum_w[:-k_bins]
+                # Sliding box over circular phase bins (n_phase_bins starting positions)
+                s_in = cum_y[k_bins : k_bins + n_phase_bins] - cum_y[:n_phase_bins]
+                r_in = cum_w[k_bins : k_bins + n_phase_bins] - cum_w[:n_phase_bins]
 
                 # Filter valid nonzero weights
                 valid = (r_in > 1e-9) & (r_in < (total_w - 1e-9))
@@ -145,8 +149,6 @@ class BoxLeastSquaresEngine:
                     continue
 
                 # Kovacs Signal Residue: SR = s / sqrt(r * (1 - r))
-                sr_vals = np.zeros_like(s_in)
-                # Transits are negative dips (y < 0 in transit): s_in is negative
                 depths = -s_in[valid] / r_in[valid]
                 # Only negative dips constitute genuine transit candidates
                 dip_mask = depths > 0.0
@@ -168,14 +170,23 @@ class BoxLeastSquaresEngine:
                 best_sr = peak_sr_period
                 best_p = float(P)
                 # Center of the best in-transit phase window
-                center_phase = (peak_phase_idx + 0.5 * (peak_q * n_phase_bins)) * bin_width
+                center_phase = ((peak_phase_idx + 0.5 * (peak_q * n_phase_bins)) * bin_width) % 1.0
                 best_t0 = float((t[0] // P) * P + center_phase * P)
                 best_q = float(peak_q * P)  # duration in days
                 best_depth = peak_depth
 
         # Calculate SNR from residual depth vs out-of-transit noise
-        noise_std = np.nanstd(y) / np.sqrt(max(1, int(best_q / (t[1] - t[0]))))
+        noise_std = np.nanstd(y) / np.sqrt(max(1, int(best_q / max(1e-5, (t[1] - t[0])))))
         snr = float(best_depth / max(1e-8, noise_std))
+
+        # Kovacs (2002) true Signal Detection Efficiency (SDE): (SR_max - mean(SR)) / std(SR)
+        finite_powers = power_spectrum[np.isfinite(power_spectrum)]
+        if len(finite_powers) > 1:
+            mean_power = float(np.mean(finite_powers))
+            std_power = float(np.std(finite_powers))
+            calc_sde = float((best_sr - mean_power) / max(1e-6, std_power))
+        else:
+            calc_sde = snr
 
         return BLSResult(
             best_period=best_p,
@@ -186,4 +197,5 @@ class BoxLeastSquaresEngine:
             snr=snr,
             periods=periods,
             power=power_spectrum,
+            sde_val=calc_sde,
         )

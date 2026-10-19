@@ -114,3 +114,30 @@ class TestMilestone1Photometry:
         # Local view center (index 100) corresponds to transit center and should exhibit minimum flux
         center_idx = len(projection.local_view) // 2
         assert projection.local_view[center_idx] < 1.0
+
+    def test_bls_circular_phase_wrapping_and_sde(self):
+        """BLS correctly recovers transits centered directly on the phase boundary (t0=0) and computes Kovacs SDE."""
+        true_period = 2.5
+        true_t0 = 0.0  # Centered right on phase 0.0 boundary
+        time, flux, _ = generate_synthetic_light_curve(
+            n_days=25.0,
+            cadence_minutes=29.4,
+            period_days=true_period,
+            t0_days=true_t0,
+            radius_ratio=0.08,
+            snr_noise_sigma=0.0003,
+            random_seed=123,
+        )
+
+        engine = BoxLeastSquaresEngine()
+        test_periods = np.linspace(1.5, 4.0, 300)
+        result = engine.search(time, flux, period_grid=test_periods)
+
+        # Period recovered accurately even when transit wraps around phase boundary
+        rel_error = abs(result.best_period - true_period) / true_period
+        assert rel_error < 0.02, f"Boundary-wrapping period error: {result.best_period:.4f} vs {true_period}"
+
+        # SDE must be computed via Kovacs formula (deviation from power spectrum mean)
+        assert result.sde > 3.0, f"Kovacs SDE should be significantly elevated for clear transit: {result.sde}"
+        assert result.sde_val is not None
+        assert np.isfinite(result.sde)
