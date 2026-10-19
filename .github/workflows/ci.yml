@@ -37,7 +37,7 @@ jobs:
 
       - name: Run automated test suite
         run: |
-          python -m pytest tests/ -v
+          python -m pytest tests/ -v -s --tb=long || (python -c "import lightgbm, numpy, scipy; print('Imports OK')" && exit 1)
 
       - name: Run interactive terminal demo
         run: |
