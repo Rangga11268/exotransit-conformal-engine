@@ -1,5 +1,6 @@
 """FastAPI Production REST API for ExoTransit-Conformal Engine."""
 
+import math
 import time
 import os
 from contextlib import asynccontextmanager
@@ -119,12 +120,17 @@ async def health_check():
     cal_n = calibrator.n_calibration if calibrator else None
     # Report actual in-memory calibrator source, not inferred from disk presence
     cal_source = getattr(calibrator, "source", None) if calibrator else None
+    is_cal = (calibrator is not None and calibrator.q_hat is not None)
+    active_q = None
+    if is_cal:
+        active_q = "Infinity" if math.isinf(calibrator.q_hat) else round(calibrator.q_hat, 4)
+
     return HealthResponse(
         status="healthy",
         version="1.0.0",
         model_loaded=(classifier is not None and classifier.booster is not None),
-        is_calibrated=(calibrator is not None and calibrator.q_hat is not None),
-        active_q_hat=calibrator.q_hat if calibrator else None,
+        is_calibrated=is_cal,
+        active_q_hat=active_q,
         nominal_coverage=f"{(calibrator.target_coverage * 100):.1f}%" if calibrator else "N/A",
         calibration_alpha=cal_alpha,
         calibration_n_samples=cal_n,
@@ -282,7 +288,7 @@ async def calibrate_engine(req: CalibrateRequest):
 
     return CalibrateResponse(
         status="recalibrated_successfully",
-        quantile_q_hat=round(q_hat, 4),
+        quantile_q_hat="Infinity" if math.isinf(q_hat) else round(q_hat, 4),
         nominal_error_rate=req.alpha,
         target_coverage=round(1.0 - req.alpha, 4),
         n_calibration=len(y)

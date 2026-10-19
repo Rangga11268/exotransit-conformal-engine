@@ -35,12 +35,14 @@ class ConformalPredictionSet:
     snr: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
+        is_inf = math.isinf(self.quantile_threshold) if self.quantile_threshold is not None else False
+        q_val = "Infinity" if is_inf else round(self.quantile_threshold, 4)
         return {
             "candidate_id": self.candidate_id,
             "prediction_set": self.prediction_set,
             "p_planet": round(self.p_planet, 4),
             "p_false_positive": round(self.p_false_positive, 4),
-            "quantile_threshold": round(self.quantile_threshold, 4),
+            "quantile_threshold": q_val,
             "status": self.status,
             "set_size": self.set_size,
             "is_singleton": self.is_singleton,

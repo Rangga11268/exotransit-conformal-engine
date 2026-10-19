@@ -42,7 +42,7 @@ class CalibrateRequest(BaseModel):
 class CalibrateResponse(BaseModel):
     """Recalibration acknowledgment response."""
     status: str
-    quantile_q_hat: float
+    quantile_q_hat: Any  # float or "Infinity"
     nominal_error_rate: float
     target_coverage: float
     n_calibration: int
@@ -55,7 +55,7 @@ class HealthResponse(BaseModel):
     version: str
     model_loaded: bool
     is_calibrated: bool
-    active_q_hat: Optional[float]
+    active_q_hat: Optional[Any] = None  # float or "Infinity"
     nominal_coverage: str
     # Calibration provenance (Priority 3)
     calibration_alpha: Optional[float] = None

@@ -225,5 +225,52 @@ class TestMilestone3Conformal:
         with pytest.raises(ValueError, match="snrs length .* must match probabilities rows"):
             calibrator.predict_set(probs, snrs=[15.2, 8.4, 22.1])
 
+    def test_conformal_prediction_set_to_dict_infinite_and_finite(self):
+        """Verify ConformalPredictionSet.to_dict handles finite and infinite quantiles safely."""
+        # 1. Finite quantile
+        ps_finite = ConformalPredictionSet(
+            candidate_id="KOI-101",
+            prediction_set=["PLANET"],
+            p_false_positive=0.02,
+            p_planet=0.98,
+            quantile_threshold=0.85231,
+            status=STATUS_SINGLETON_PLANET,
+            set_size=1,
+            is_singleton=True,
+            snr=18.5,
+        )
+        d_fin = ps_finite.to_dict()
+        assert d_fin["quantile_threshold"] == 0.8523
+
+        # 2. Infinite quantile (must serialize to 'Infinity' string, not crash round())
+        ps_inf = ConformalPredictionSet(
+            candidate_id="KOI-102",
+            prediction_set=["FALSE_POSITIVE", "PLANET"],
+            p_false_positive=0.5,
+            p_planet=0.5,
+            quantile_threshold=float("inf"),
+            status=STATUS_AMBIGUOUS,
+            set_size=2,
+            is_singleton=False,
+            snr=None,
+        )
+        d_inf = ps_inf.to_dict()
+        assert d_inf["quantile_threshold"] == "Infinity"
+
+    def test_calibrator_load_alpha_validation(self, tmp_path):
+        """Verify that loading calibration state validates expected runtime alpha."""
+        cal = SplitConformalCalibrator(nominal_error_rate=0.05)
+        cal.calibrate(self.cal_probs, self.cal_labels)
+        save_path = str(tmp_path / "cal_alpha_test.json")
+        cal.save(save_path)
+
+        # Loading with matching expected_alpha succeeds
+        loaded_ok = SplitConformalCalibrator.load(save_path, expected_alpha=0.05)
+        assert loaded_ok.alpha == 0.05
+
+        # Loading with mismatched expected_alpha raises ValueError
+        with pytest.raises(ValueError, match="Calibration alpha mismatch"):
+            SplitConformalCalibrator.load(save_path, expected_alpha=0.10)
+
 
 
