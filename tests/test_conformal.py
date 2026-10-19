@@ -164,6 +164,15 @@ class TestMilestone3Conformal:
         with pytest.raises(ValueError, match="in \\[0.0, 1.0\\]"):
             calibrator.calibrate(np.array([[1.5, -0.5]]), np.array([0]))
 
+        # Row sum does not equal 1.0
+        with pytest.raises(ValueError, match="must sum to 1.0"):
+            calibrator.calibrate(np.array([[0.8, 0.8]]), np.array([0]))
+
+        calibrated_instance = SplitConformalCalibrator(nominal_error_rate=0.05)
+        calibrated_instance.calibrate(self.cal_probs, self.cal_labels)
+        with pytest.raises(ValueError, match="must sum to 1.0"):
+            calibrated_instance.predict_set(np.array([[0.2, 0.2]]))
+
     def test_conformal_evaluate_validation(self):
         """evaluate() must strictly validate inputs identically to calibrate()."""
         calibrator = SplitConformalCalibrator(nominal_error_rate=0.05)

@@ -107,6 +107,8 @@ class SplitConformalCalibrator:
             raise ValueError("probabilities must contain only finite numbers (no NaN or Inf)")
         if np.any(probs < 0.0) or np.any(probs > 1.0):
             raise ValueError("probabilities values must be strictly in [0.0, 1.0]")
+        if not np.allclose(np.sum(probs, axis=1), 1.0, atol=1e-3):
+            raise ValueError("Each row of probabilities must sum to 1.0 (valid probability distribution across classes)")
         if not np.all(np.isin(labels, [0, 1])):
             raise ValueError(f"ground_truth labels must be strictly binary (0 or 1), got invalid labels: {np.unique(labels)}")
 
@@ -163,6 +165,8 @@ class SplitConformalCalibrator:
             raise ValueError("probabilities must contain only finite numbers (no NaN or Inf)")
         if np.any(probs < 0.0) or np.any(probs > 1.0):
             raise ValueError("probabilities values must be strictly in [0.0, 1.0]")
+        if not np.allclose(np.sum(probs, axis=1), 1.0, atol=1e-3):
+            raise ValueError("Each row of probabilities must sum to 1.0 (valid probability distribution across classes)")
 
         m = len(probs)
         if candidate_ids is not None and len(candidate_ids) != m:
