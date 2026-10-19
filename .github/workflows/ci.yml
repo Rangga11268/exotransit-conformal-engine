@@ -41,23 +41,23 @@ jobs:
       run: |
         python -m pytest tests -v
 
-      - name: Run interactive terminal demo
-        env:
-          PYTHONPATH: .
-          CI: "true"
-        run: |
-          python demo.py
+    - name: Run interactive terminal demo
+      env:
+        PYTHONPATH: .
+        CI: "true"
+      run: |
+        python demo.py
 
-      - name: Run conformal coverage & SNR ablation benchmark
-        env:
-          PYTHONPATH: .
-          CI: "true"
-        run: |
-          python benchmarks/benchmark_conformal.py
+    - name: Run conformal coverage & SNR ablation benchmark
+      env:
+        PYTHONPATH: .
+        CI: "true"
+      run: |
+        python benchmarks/benchmark_conformal.py
 
-      - name: Run CPU inference latency benchmark
-        env:
-          PYTHONPATH: .
-          CI: "true"
-        run: |
-          python benchmarks/benchmark_latency.py
+    - name: Run CPU inference latency benchmark
+      env:
+        PYTHONPATH: .
+        CI: "true"
+      run: |
+        python benchmarks/benchmark_latency.py
