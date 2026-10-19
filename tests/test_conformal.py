@@ -201,4 +201,20 @@ class TestMilestone3Conformal:
         assert math.isinf(reloaded.q_hat)
         assert reloaded.alpha == 0.05
 
+    def test_candidate_ids_and_snrs_length_validation(self):
+        """predict_set must reject candidate_ids or snrs with mismatched length."""
+        calibrator = SplitConformalCalibrator(nominal_error_rate=0.05)
+        calibrator.calibrate(self.cal_probs, self.cal_labels)
+
+        probs = np.array([[0.8, 0.2], [0.3, 0.7]])  # 2 candidates
+
+        # candidate_ids mismatch (1 ID for 2 rows)
+        with pytest.raises(ValueError, match="candidate_ids length .* must match probabilities rows"):
+            calibrator.predict_set(probs, candidate_ids=["KOI-001"])
+
+        # snrs mismatch (3 SNRs for 2 rows)
+        with pytest.raises(ValueError, match="snrs length .* must match probabilities rows"):
+            calibrator.predict_set(probs, snrs=[15.2, 8.4, 22.1])
+
+
 

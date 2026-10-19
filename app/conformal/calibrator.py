@@ -165,6 +165,11 @@ class SplitConformalCalibrator:
             raise ValueError("probabilities values must be strictly in [0.0, 1.0]")
 
         m = len(probs)
+        if candidate_ids is not None and len(candidate_ids) != m:
+            raise ValueError(f"candidate_ids length ({len(candidate_ids)}) must match probabilities rows ({m})")
+        if snrs is not None and len(snrs) != m:
+            raise ValueError(f"snrs length ({len(snrs)}) must match probabilities rows ({m})")
+
         if candidate_ids is None:
             candidate_ids = [f"KOI-{i+1:04d}" for i in range(m)]
 
@@ -175,7 +180,7 @@ class SplitConformalCalibrator:
             p_fp = float(probs[i, 0])
             p_planet = float(probs[i, 1])
             cid = candidate_ids[i]
-            snr_val = snrs[i] if (snrs is not None and i < len(snrs)) else None
+            snr_val = snrs[i] if snrs is not None else None
 
             if np.isinf(self.q_hat):
                 # When q_hat is infinite (e.g. calibration set too small for alpha), all labels included
