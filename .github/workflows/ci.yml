@@ -37,7 +37,14 @@ jobs:
 
       - name: Run automated test suite
         run: |
-          python run_tests.py
+          python -c "
+          import subprocess, sys
+          p = subprocess.run([sys.executable, 'run_tests.py'], capture_output=True, text=True)
+          print(p.stdout)
+          if p.stderr:
+              print('STDERR:\n', p.stderr)
+          sys.exit(p.returncode)
+          "
 
       - name: Run interactive terminal demo
         run: |
