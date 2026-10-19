@@ -112,6 +112,14 @@ class TestMilestone4API:
         assert resp4.status_code == 400
         assert "monotone" in resp4.json()["detail"].lower()
 
+        # 5. Null alpha rejection (P1 non-nullable guard)
+        resp5 = client.post("/v1/transit/detect", json={
+            "time": [float(i) for i in range(60)],
+            "flux": [1.0]*60,
+            "alpha": None
+        })
+        assert resp5.status_code == 422  # Pydantic rejects null
+
     def test_health_calibration_provenance(self, client):
         """GET /v1/health must expose calibration alpha, n_samples, source, and model_version."""
         resp = client.get("/v1/health")
@@ -126,6 +134,10 @@ class TestMilestone4API:
 
     def test_recalibrate_endpoint(self, client):
         """POST /v1/conformal/calibrate must update error rate and return acknowledgment."""
+        # 1. Reject null alpha
+        resp_null = client.post("/v1/conformal/calibrate", json={"alpha": None})
+        assert resp_null.status_code == 422
+
         payload = {
             "alpha": 0.10,
             "n_synthetic_samples": 100
@@ -137,3 +149,7 @@ class TestMilestone4API:
         assert data["nominal_error_rate"] == 0.10
         assert data["target_coverage"] == 0.90
         assert 0.0 < data["quantile_q_hat"] < 1.0
+
+        # Health endpoint must dynamically report api_recalibration as source
+        health_resp = client.get("/v1/health")
+        assert health_resp.json()["calibration_source"] == "api_recalibration"

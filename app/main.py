@@ -40,6 +40,7 @@ def _bootstrap_calibrator(alpha: float = 0.05, n_samples: int = 500) -> SplitCon
         try:
             loaded_cal = SplitConformalCalibrator.load(CALIBRATION_FILE, expected_alpha=alpha)
             if loaded_cal.n_calibration >= 100:
+                loaded_cal.source = f"file:{os.path.basename(CALIBRATION_FILE)}"
                 return loaded_cal
         except Exception:
             pass
@@ -52,6 +53,7 @@ def _bootstrap_calibrator(alpha: float = 0.05, n_samples: int = 500) -> SplitCon
     X, y = generate_synthetic_dataset(n_samples=n_samples, random_seed=999)
     probs = classifier.predict_proba_from_features(X)
     cal.calibrate(probs, y)
+    cal.source = "synthetic_bootstrap"
     try:
         cal.save(CALIBRATION_FILE)
     except Exception:
@@ -115,13 +117,8 @@ async def health_check():
     """System health check and conformal calibration provenance."""
     cal_alpha = calibrator.alpha if calibrator else None
     cal_n = calibrator.n_calibration if calibrator else None
-    cal_source = None
-    if calibrator:
-        cal_source = (
-            f"file:{os.path.basename(CALIBRATION_FILE)}"
-            if os.path.exists(CALIBRATION_FILE)
-            else "synthetic_bootstrap"
-        )
+    # Report actual in-memory calibrator source, not inferred from disk presence
+    cal_source = getattr(calibrator, "source", None) if calibrator else None
     return HealthResponse(
         status="healthy",
         version="1.0.0",
@@ -235,7 +232,7 @@ async def detect_transit(req: TransitDetectionRequest):
     conformal_sets = active_cal.predict_set(
         probabilities=np.array([[p_fp, p_planet]]),
         candidate_ids=[req.candidate_id or "KOI-001"],
-        snrs=[float(bls_res.sde)]
+        snrs=[float(bls_res.snr)]
     )
     conf_res = conformal_sets[0].to_dict()
 
@@ -251,7 +248,7 @@ async def detect_transit(req: TransitDetectionRequest):
             duration_days=round(float(bls_res.best_duration), 4),
             depth=round(float(bls_res.best_depth), 6),
             sde=round(float(bls_res.sde), 2),
-            snr=round(float(bls_res.sde), 2),
+            snr=round(float(bls_res.snr), 2),
         ),
         estimated_radius_ratio=round(radius_ratio_est, 4),
         probabilities={
@@ -274,6 +271,7 @@ async def calibrate_engine(req: CalibrateRequest):
     X, y = generate_synthetic_dataset(n_samples=req.n_synthetic_samples, random_seed=int(req.alpha * 10000))
     probs = classifier.predict_proba_from_features(X)
     q_hat = cal.calibrate(probs, y)
+    cal.source = "api_recalibration"
     calibrator = cal
     # Only persist to default file if recalibrated with default nominal error rate
     if abs(req.alpha - 0.05) < 1e-4:

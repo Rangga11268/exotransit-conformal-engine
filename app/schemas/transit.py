@@ -9,7 +9,7 @@ class TransitDetectionRequest(BaseModel):
     time: List[float] = Field(..., description="Timestamps in days (e.g. BJD or BKJD)")
     flux: List[float] = Field(..., description="Normalized relative flux measurements")
     candidate_id: Optional[str] = Field("KOI-USER-001", description="Astronomical candidate ID")
-    alpha: Optional[float] = Field(0.05, ge=0.001, le=0.50, description="Nominal error rate tolerance (default 0.05 for 95% coverage)")
+    alpha: float = Field(0.05, ge=0.001, le=0.50, description="Nominal error rate tolerance (default 0.05 for 95% coverage)")
     detrend: Optional[bool] = Field(True, description="Whether to apply running median detrending before BLS")
 
 
@@ -35,8 +35,8 @@ class TransitDetectionResponse(BaseModel):
 
 class CalibrateRequest(BaseModel):
     """Administrative recalibration request payload."""
-    alpha: Optional[float] = Field(0.05, ge=0.001, le=0.50, description="Target error rate (e.g. 0.05 for 95% coverage)")
-    n_synthetic_samples: Optional[int] = Field(300, ge=50, le=2000, description="Synthetic calibration set size if no external dataset provided")
+    alpha: float = Field(0.05, ge=0.001, le=0.50, description="Target error rate (e.g. 0.05 for 95% coverage)")
+    n_synthetic_samples: int = Field(300, ge=50, le=2000, description="Synthetic calibration set size if no external dataset provided")
 
 
 class CalibrateResponse(BaseModel):

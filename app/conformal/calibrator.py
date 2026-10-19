@@ -69,6 +69,7 @@ class SplitConformalCalibrator:
         self.q_hat: Optional[float] = None
         self.calibration_scores: Optional[np.ndarray] = None
         self.n_calibration: int = 0
+        self.source: Optional[str] = None
 
     @property
     def target_coverage(self) -> float:
