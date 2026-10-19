@@ -37,7 +37,7 @@ jobs:
 
       - name: Run automated test suite
         run: |
-          python -m pytest tests -v --tb=short
+          python run_tests.py
 
       - name: Run interactive terminal demo
         run: |
