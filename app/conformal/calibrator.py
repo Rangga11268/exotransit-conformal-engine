@@ -68,16 +68,31 @@ class SplitConformalCalibrator:
         """
         if not (0.0 < nominal_error_rate < 1.0):
             raise ValueError(f"nominal_error_rate must be in (0, 1), got {nominal_error_rate}")
-        self.alpha = float(nominal_error_rate)
+        self._alpha = float(nominal_error_rate)
         self.q_hat: Optional[float] = None
         self.calibration_scores: Optional[np.ndarray] = None
         self.n_calibration: int = 0
         self.source: Optional[str] = None
 
     @property
+    def alpha(self) -> float:
+        """Nominal error rate in (0, 1)."""
+        return self._alpha
+
+    @alpha.setter
+    def alpha(self, value: float) -> None:
+        val = float(value)
+        if not (0.0 < val < 1.0):
+            raise ValueError(f"nominal_error_rate must be in (0, 1), got {val}")
+        if abs(self._alpha - val) > 1e-6:
+            self._alpha = val
+            # Changing alpha invalidates the previously calibrated quantile threshold
+            self.q_hat = None
+
+    @property
     def target_coverage(self) -> float:
         """Target nominal mathematical coverage (1 - alpha)."""
-        return 1.0 - self.alpha
+        return 1.0 - self._alpha
 
     def calibrate(self, probabilities: np.ndarray, ground_truth: np.ndarray) -> float:
         """Calibrate non-conformity quantile q_hat on held-out calibration split.

@@ -272,5 +272,102 @@ class TestMilestone3Conformal:
         with pytest.raises(ValueError, match="Calibration alpha mismatch"):
             SplitConformalCalibrator.load(save_path, expected_alpha=0.10)
 
+    def test_round_trip_persistence_finite_quantile(self, tmp_path):
+        """Verify save -> load -> predict consistency when q_hat is finite."""
+        cal = SplitConformalCalibrator(nominal_error_rate=0.05)
+        cal.calibrate(self.cal_probs, self.cal_labels)
+        assert np.isfinite(cal.q_hat)
+
+        test_probs = np.array([[0.1, 0.9], [0.8, 0.2], [0.45, 0.55]])
+        preds_before = [p.to_dict() for p in cal.predict_set(test_probs)]
+
+        save_file = str(tmp_path / "finite_cal.json")
+        cal.save(save_file)
+
+        loaded_cal = SplitConformalCalibrator.load(save_file)
+        assert loaded_cal.alpha == cal.alpha
+        assert loaded_cal.q_hat == cal.q_hat
+        preds_after = [p.to_dict() for p in loaded_cal.predict_set(test_probs)]
+
+        assert preds_before == preds_after
+
+    def test_round_trip_persistence_infinite_quantile(self, tmp_path):
+        """Verify save -> load -> predict consistency when q_hat is infinity."""
+        # N=5, alpha=0.01 -> k = ceil(6 * 0.99) = 6 > 5 -> q_hat = inf
+        cal = SplitConformalCalibrator(nominal_error_rate=0.01)
+        small_probs = np.array([[0.2, 0.8], [0.3, 0.7], [0.9, 0.1], [0.4, 0.6], [0.1, 0.9]])
+        small_labels = np.array([1, 1, 0, 1, 1])
+        q = cal.calibrate(small_probs, small_labels)
+        assert math.isinf(q)
+
+        test_probs = np.array([[0.1, 0.9], [0.8, 0.2]])
+        preds_before = [p.to_dict() for p in cal.predict_set(test_probs)]
+
+        save_file = str(tmp_path / "infinite_cal.json")
+        cal.save(save_file)
+
+        # Confirm JSON serialization contains string "Infinity"
+        with open(save_file, "r") as f:
+            content = f.read()
+        assert '"Infinity"' in content
+
+        loaded_cal = SplitConformalCalibrator.load(save_file)
+        assert math.isinf(loaded_cal.q_hat)
+        preds_after = [p.to_dict() for p in loaded_cal.predict_set(test_probs)]
+
+        assert preds_before == preds_after
+        for p in preds_after:
+            assert p["prediction_set"] == ["FALSE_POSITIVE", "PLANET"]
+
+    def test_alpha_mutation_invalidates_quantile_threshold(self):
+        """Mutating calibrator alpha after calibration must invalidate q_hat and prevent silent stale reuse."""
+        cal = SplitConformalCalibrator(nominal_error_rate=0.05)
+        cal.calibrate(self.cal_probs, self.cal_labels)
+        assert cal.q_hat is not None
+
+        # Change alpha
+        cal.alpha = 0.10
+        assert cal.alpha == 0.10
+        assert cal.q_hat is None
+
+        # Predicting without recalibrating raises RuntimeError
+        test_probs = np.array([[0.1, 0.9]])
+        with pytest.raises(RuntimeError, match="Calibrator has not been calibrated"):
+            cal.predict_set(test_probs)
+
+    def test_invalid_alpha_bounds_rejected(self):
+        """Alpha must be strictly within (0, 1)."""
+        with pytest.raises(ValueError, match="nominal_error_rate must be in"):
+            SplitConformalCalibrator(nominal_error_rate=0.0)
+        with pytest.raises(ValueError, match="nominal_error_rate must be in"):
+            SplitConformalCalibrator(nominal_error_rate=1.0)
+        with pytest.raises(ValueError, match="nominal_error_rate must be in"):
+            SplitConformalCalibrator(nominal_error_rate=-0.05)
+
+    def test_input_guards_shape_mismatch_and_non_finite(self):
+        """Calibrator rejects NaN, Inf, non-summing probabilities, and mismatched lengths."""
+        cal = SplitConformalCalibrator(nominal_error_rate=0.05)
+        cal.calibrate(self.cal_probs, self.cal_labels)
+
+        # 1. NaN in probabilities
+        with pytest.raises(ValueError, match="probabilities must contain only finite numbers"):
+            cal.predict_set(np.array([[np.nan, 0.5]]))
+
+        # 2. Infinite in probabilities
+        with pytest.raises(ValueError, match="probabilities must contain only finite numbers"):
+            cal.predict_set(np.array([[float("inf"), 0.5]]))
+
+        # 3. Probabilities do not sum to 1.0
+        with pytest.raises(ValueError, match="must sum to 1.0"):
+            cal.predict_set(np.array([[0.2, 0.2]]))
+
+        # 4. Candidate IDs length mismatch
+        with pytest.raises(ValueError, match="candidate_ids length"):
+            cal.predict_set(np.array([[0.1, 0.9]]), candidate_ids=["KOI-1", "KOI-2"])
+
+        # 5. SNR length mismatch
+        with pytest.raises(ValueError, match="snrs length"):
+            cal.predict_set(np.array([[0.1, 0.9]]), snrs=[15.0, 20.0])
+
 
 

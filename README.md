@@ -88,13 +88,30 @@ Evaluated on Python 3.12 (Native CPU, Windows 11 AMD64, 50 trials with 10 warmup
 | **ML Pipeline Latency (P99)** | **14.41 ms** | $< 20.0$ ms on standard x86_64 CPU | Detrending + folding + feature extractor + LightGBM + conformal |
 | **Full Pipeline Latency (P50)** | **589.36 ms** | $< 1,000$ ms on 1,470-pt light curve | Including full 1,000-trial BLS periodogram scan |
 | **Model Footprint** | **<200 KB Model (<25 MB RAM)** | $< 50$ MB RAM | LightGBM CPU Booster (Zero PyTorch/CUDA runtime) |
-| **Automated Test Suite** | **18 / 18 Passed (100%)** | 100% Pass Rate | `pytest tests/` |
+| **Automated Test Suite** | **33 / 33 Passed (100%)** | 100% Pass Rate | `pytest tests/` (conformal validation, persistence, BLS, API) |
+
+### 🔬 Multi-Seed Finite-Sample Coverage Benchmark ($S = 10$ Seeds)
+
+Evaluated via `benchmarks/benchmark_conformal.py` across varying calibration split sizes $N_{\text{cal}}$ and error tolerances $\alpha$:
+
+| $N_{\text{cal}}$ | $\alpha$ | Guaranteed ($1-\alpha$) | Empirical Coverage ($\text{Mean} \pm \text{Std}$) | Average Set Size | Empty Set Rate | Ambiguous Set Rate |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **25** | 0.05 | 95% | **98.18% $\pm$ 1.34%** | 1.05 $\pm$ 0.05 | 0.0% | 5.2% |
+| **50** | 0.05 | 95% | **98.85% $\pm$ 0.92%** | 1.14 $\pm$ 0.15 | 0.0% | 13.7% |
+| **100** | 0.05 | 95% | **97.80% $\pm$ 1.08%** | 1.05 $\pm$ 0.04 | 0.0% | 5.0% |
+| **500** | 0.05 | 95% | **97.52% $\pm$ 0.84%** | 1.03 $\pm$ 0.02 | 0.0% | 2.6% |
+| **50** | 0.10 | 90% | **98.47% $\pm$ 1.25%** | 1.08 $\pm$ 0.05 | 0.0% | 7.8% |
+| **100** | 0.10 | 90% | **98.80% $\pm$ 1.15%** | 1.09 $\pm$ 0.04 | 0.0% | 8.8% |
+| **500** | 0.10 | 90% | **99.10% $\pm$ 0.51%** | 1.09 $\pm$ 0.01 | 0.0% | 8.7% |
+| **15** | 0.01 | 99% | **100.00% $\pm$ 0.00%** | 2.00 $\pm$ 0.00 | 0.0% | 100.0% |
 
 > [!NOTE]
-> **Experimental Context & Conformal Exchangeability:**
-> * **Finite-Sample Mathematical Guarantees:** Split Conformal Prediction guarantees $P(Y_{n+1} \in \mathcal{C}(X_{n+1})) \ge 1 - \alpha$ under the statistical assumption of **exchangeability** between the calibration set and test samples. The 95.1% empirical coverage and SNR efficiency curves are evaluated on an independent held-out calibration/test split using simulated Mandel-Agol physics with realistic white noise and micro-flares.
-> * **Empirical NASA Catalog Verification:** The engine includes 5 curated empirical NASA Kepler benchmark targets (`app/data/nasa_samples.py`) derived from the NASA Exoplanet Archive (IPAC/Caltech) Cumulative Table (e.g. Kepler-8b, Kepler-10b, Kepler-90g, KOI-115.03, KIC 7377033) for ground-truth verification. In uncurated field surveys, extreme out-of-distribution instrumental systematics or unmodeled stellar activity may induce covariate shift, requiring periodic recalibration via `/v1/conformal/calibrate`.
-> * **BLS Search Architecture:** The BLS engine achieves high throughput by vectorizing the phase-binned circular prefix sum ($N_{\text{bins}} = 200$) across trial duration fractions. While the inner sliding box is fully vectorized via NumPy SIMD, scanning across thousands of candidate periods executes sequentially over the period grid.
+> **Theoretical Guarantees & Edge Cases:**
+> 1. **Finite-Sample Mathematical Guarantees:** Split Conformal Prediction guarantees $P(Y_{n+1} \in \mathcal{C}(X_{n+1})) \ge 1 - \alpha$ under the statistical assumption of **exchangeability** between calibration and test samples.
+> 2. **Finite-Sample Small $N$ Fallback:** When $k = \lceil (n+1)(1-\alpha) \rceil > n$ (e.g. $N=15, \alpha=0.01$), `q_hat` is mathematically set to $\infty$ (`"Infinity"` JSON serialization), ensuring full set expansion $\{0, 1\}$ with $100\%$ coverage rather than producing undercovered sets.
+> 3. **Alpha Lifecycle Integrity:** Mutating `calibrator.alpha` dynamically invalidates pre-computed `q_hat = None`, preventing stale quantile evaluation.
+> 4. **Empirical NASA Catalog Verification:** The engine includes 5 curated empirical NASA Kepler benchmark targets (`app/data/nasa_samples.py`) derived from the NASA Exoplanet Archive (IPAC/Caltech) Cumulative Table (e.g. Kepler-8b, Kepler-10b, Kepler-90g, KOI-115.03, KIC 7377033) for ground-truth verification. In uncurated field surveys, extreme out-of-distribution instrumental systematics or unmodeled stellar activity may induce covariate shift, requiring periodic recalibration via `/v1/conformal/calibrate`.
+> 5. **BLS Search Architecture:** The BLS engine achieves high throughput by vectorizing the phase-binned circular prefix sum ($N_{\text{bins}} = 200$) across trial duration fractions. While the inner sliding box is fully vectorized via NumPy SIMD, scanning across thousands of candidate periods executes sequentially over the period grid.
 
 ---
 
