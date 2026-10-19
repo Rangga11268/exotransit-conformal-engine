@@ -7,6 +7,7 @@ Without relying on distributional or asymptotic normality assumptions.
 
 from dataclasses import dataclass
 import json
+import math
 import os
 from typing import List, Dict, Optional, Any
 import numpy as np
@@ -237,7 +238,22 @@ class SplitConformalCalibrator:
 
         probs = np.asarray(probabilities, dtype=np.float64)
         labels = np.asarray(ground_truth, dtype=np.int64)
+
+        if probs.ndim != 2 or probs.shape[1] != 2:
+            raise ValueError(f"probabilities must have shape (n, 2), got {probs.shape}")
+        if len(probs) != len(labels):
+            raise ValueError(f"Lengths mismatch: {len(probs)} vs {len(labels)}")
+
         m = len(labels)
+        if m == 0:
+            raise ValueError("Evaluation set cannot be empty.")
+
+        if not np.all(np.isfinite(probs)):
+            raise ValueError("probabilities must contain only finite numbers (no NaN or Inf)")
+        if np.any(probs < 0.0) or np.any(probs > 1.0):
+            raise ValueError("probabilities values must be strictly in [0.0, 1.0]")
+        if not np.all(np.isin(labels, [0, 1])):
+            raise ValueError(f"ground_truth labels must be strictly binary (0 or 1), got invalid labels: {np.unique(labels)}")
 
         pred_sets = self.predict_set(probs)
         covered_count = 0
@@ -272,10 +288,16 @@ class SplitConformalCalibrator:
         }
 
     def save(self, filepath: str) -> None:
-        """Persists calibrated state to JSON."""
+        """Persists calibrated state to JSON with strict standard-compliant infinity encoding."""
+        # Standard JSON does not natively support IEEE-754 Infinity.
+        # Encode float('inf') explicitly as string "Infinity" and record is_infinite flag.
+        is_inf = math.isinf(self.q_hat) if self.q_hat is not None else False
+        q_hat_val = "Infinity" if is_inf else self.q_hat
+
         data = {
             "alpha": self.alpha,
-            "q_hat": self.q_hat,
+            "q_hat": q_hat_val,
+            "q_hat_is_infinite": is_inf,
             "n_calibration": self.n_calibration,
             "calibration_scores": self.calibration_scores.tolist() if self.calibration_scores is not None else None
         }
@@ -295,7 +317,14 @@ class SplitConformalCalibrator:
                 f"(coverage {1-saved_alpha:.1%}), expected alpha={expected_alpha} ({1-expected_alpha:.1%})"
             )
         cal = cls(nominal_error_rate=saved_alpha)
-        cal.q_hat = data["q_hat"]
+        
+        raw_q_hat = data.get("q_hat")
+        is_inf = data.get("q_hat_is_infinite", False)
+        if is_inf or raw_q_hat == "Infinity" or (isinstance(raw_q_hat, (int, float)) and math.isinf(raw_q_hat)):
+            cal.q_hat = float("inf")
+        else:
+            cal.q_hat = float(raw_q_hat) if raw_q_hat is not None else None
+
         cal.n_calibration = data["n_calibration"]
         if data.get("calibration_scores"):
             cal.calibration_scores = np.array(data["calibration_scores"], dtype=np.float64)

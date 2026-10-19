@@ -1,5 +1,6 @@
 """Automated test suite for Milestone 3: Distribution-Free Split Conformal Prediction."""
 
+import math
 import os
 import pytest
 import numpy as np
@@ -162,4 +163,42 @@ class TestMilestone3Conformal:
         # Out-of-bounds probability > 1.0
         with pytest.raises(ValueError, match="in \\[0.0, 1.0\\]"):
             calibrator.calibrate(np.array([[1.5, -0.5]]), np.array([0]))
+
+    def test_conformal_evaluate_validation(self):
+        """evaluate() must strictly validate inputs identically to calibrate()."""
+        calibrator = SplitConformalCalibrator(nominal_error_rate=0.05)
+        calibrator.calibrate(self.cal_probs, self.cal_labels)
+
+        # Illegal label -1 in evaluate
+        with pytest.raises(ValueError, match="strictly binary"):
+            calibrator.evaluate(np.array([[0.5, 0.5]]), np.array([-1]))
+
+        # NaN probabilities in evaluate
+        with pytest.raises(ValueError, match="finite"):
+            calibrator.evaluate(np.array([[np.nan, 0.5]]), np.array([0]))
+
+        # Dimension mismatch
+        with pytest.raises(ValueError, match="Lengths mismatch"):
+            calibrator.evaluate(np.array([[0.5, 0.5], [0.8, 0.2]]), np.array([0]))
+
+    def test_conformal_infinite_quantile_persistence(self, tmp_path):
+        """Calibrator with q_hat=inf must persist and reload across standard JSON without errors."""
+        calibrator = SplitConformalCalibrator(nominal_error_rate=0.05)
+        # Small sample triggers q_hat = inf
+        calibrator.calibrate(np.array([[0.1, 0.9], [0.8, 0.2]]), np.array([1, 0]))
+        assert math.isinf(calibrator.q_hat)
+
+        json_file = str(tmp_path / "infinite_calibration.json")
+        calibrator.save(json_file)
+
+        # Read raw json to ensure it's valid standard JSON
+        with open(json_file, "r") as f:
+            raw_text = f.read()
+            assert "Infinity" in raw_text
+
+        # Reload and check
+        reloaded = SplitConformalCalibrator.load(json_file)
+        assert math.isinf(reloaded.q_hat)
+        assert reloaded.alpha == 0.05
+
 
