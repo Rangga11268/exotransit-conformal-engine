@@ -1,8 +1,17 @@
 """Distribution-Free Split Conformal Prediction Calibrator.
 
-Provides rigorous mathematical finite-sample guarantees:
+Provides rigorous mathematical finite-sample marginal coverage guarantees:
 P(Y_true in C(X)) >= 1 - alpha
-Without relying on distributional or asymptotic normality assumptions.
+
+Statistical Scope & Assumptions:
+1. Exchangeability: The guarantee holds marginally over the joint distribution of calibration and test observations
+   under the exchangeability (e.g. i.i.d.) assumption. It is a marginal guarantee, not a conditional per-instance
+   or sub-group guarantee. Under severe instrument covariate shift (e.g. switching telescope instruments or changing
+   stellar noise regimes), standard exchangeability may be violated.
+2. Quantile Sentinel ("Infinity"): When the calibration sample size n is insufficient to support the requested
+   1 - alpha level (i.e. ceil((n + 1) * (1 - alpha)) > n), the threshold evaluates mathematically to +inf.
+   The API serializes this as the sentinel string "Infinity", which yields the uninformative full set {FP, PLANET}
+   to conservatively maintain coverage without making false claims of precision.
 """
 
 from dataclasses import dataclass

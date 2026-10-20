@@ -1,9 +1,14 @@
-"""Dual-Branch multi-scale feature extractor for exoplanetary light curves.
+"""Dual-Branch multi-scale handcrafted feature extractor for exoplanetary light curves.
 
-Extracts deep morphological and astrophysical features from:
-1. Global View (2,001 points) - Dilated 1D receptive fields, secondary eclipses, odd-even parity.
-2. Local View (201 points) - Ingress/egress curvature, U-shape vs V-shape limb darkening.
+Extracts deterministic multiscale morphological and astrophysical features using fixed analytic kernels:
+1. Global View (2,001 points) - Dilated 1D receptive fields with fixed geometric filters (smoothing, gradient, curvature),
+   odd-even transit depth parity, and secondary eclipse detection.
+2. Local View (201 points) - Ingress/egress curvature and U-shape vs V-shape limb darkening geometry.
 3. Astrophysical Scalars - BLS period, depth, duration, SDE, duty cycle.
+
+Note on Terminology:
+This extractor employs handcrafted multiscale filter banks (fixed geometric edge/curvature kernels and statistical summary pooling)
+designed specifically for physics-guided explainability and zero heavy deep learning dependencies. It does NOT use learned neural network weights.
 """
 
 from typing import Dict, Any, Optional
