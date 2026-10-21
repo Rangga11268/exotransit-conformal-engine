@@ -152,9 +152,9 @@ class SplitConformalCalibrator:
         if k > n:
             self.q_hat = float("inf")
         else:
-            level = k / float(n)
-            level = min(1.0, max(0.0, level))
-            self.q_hat = float(np.quantile(self.calibration_scores, level, method="higher"))
+            # Canonical order statistic formulation: S_{(k)} (k-th smallest score)
+            # In a 0-indexed sorted array, this corresponds exactly to sorted_scores[k - 1].
+            self.q_hat = float(self.calibration_scores[k - 1])
 
         return self.q_hat
 

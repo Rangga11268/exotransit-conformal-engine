@@ -369,5 +369,49 @@ class TestMilestone3Conformal:
         with pytest.raises(ValueError, match="snrs length"):
             cal.predict_set(np.array([[0.1, 0.9]]), snrs=[15.0, 20.0])
 
+    def test_exact_order_statistic_alignment(self):
+        """Verify calibration threshold matches exact theoretical order statistic S_{(k)}."""
+        # 10 synthetic samples with known nonconformity scores: 0.1, 0.2, ..., 1.0
+        n = 10
+        probs = np.zeros((n, 2))
+        for i in range(n):
+            score = (i + 1) / 10.0  # scores = [0.1, 0.2, 0.3, ..., 1.0]
+            probs[i, 1] = 1.0 - score  # true label is 1, so nonconformity score = 1 - P(1) = score
+            probs[i, 0] = score
+        labels = np.ones(n, dtype=int)
+
+        # For alpha = 0.20: k = ceil(11 * 0.80) = ceil(8.8) = 9
+        # Exact order statistic: 9th value = 0.9
+        cal = SplitConformalCalibrator(nominal_error_rate=0.20)
+        q = cal.calibrate(probs, labels)
+        assert np.isclose(q, 0.9, atol=1e-5), f"Expected S_(9) = 0.9, got {q}"
+
+        # For alpha = 0.05: k = ceil(11 * 0.95) = ceil(10.45) = 11 > 10 => inf
+        cal_inf = SplitConformalCalibrator(nominal_error_rate=0.05)
+        q_inf = cal_inf.calibrate(probs, labels)
+        assert math.isinf(q_inf), f"Expected inf for k > n, got {q_inf}"
+
+    def test_multi_seed_empirical_coverage(self):
+        """Verify valid empirical coverage >= 1 - alpha across multiple independent seeds."""
+        coverages = []
+        alpha = 0.10
+        for seed in [10, 42, 99, 123, 777]:
+            rng = np.random.RandomState(seed)
+            y = rng.binomial(1, 0.5, size=600)
+            probs = np.zeros((600, 2))
+            for i in range(600):
+                p1 = rng.beta(5.0, 2.0) if y[i] == 1 else rng.beta(2.0, 5.0)
+                probs[i, 1] = p1
+                probs[i, 0] = 1.0 - p1
+
+            cal = SplitConformalCalibrator(nominal_error_rate=alpha)
+            cal.calibrate(probs[:300], y[:300])
+            eval_res = cal.evaluate(probs[300:], y[300:])
+            coverages.append(eval_res["empirical_coverage"])
+
+        mean_cov = float(np.mean(coverages))
+        assert mean_cov >= 1.0 - alpha, f"Mean empirical coverage {mean_cov:.3f} fell below {1.0 - alpha}"
+
+
 
 

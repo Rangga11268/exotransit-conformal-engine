@@ -227,9 +227,11 @@ async def detect_transit(req: TransitDetectionRequest):
         if calibrator.calibration_scores is not None:
             active_cal.calibration_scores = calibrator.calibration_scores
             active_cal.n_calibration = calibrator.n_calibration
-            level = np.ceil((active_cal.n_calibration + 1) * (1.0 - req.alpha)) / active_cal.n_calibration
-            level = min(1.0, max(0.0, level))
-            active_cal.q_hat = float(np.quantile(active_cal.calibration_scores, level, method="higher"))
+            k = int(np.ceil((active_cal.n_calibration + 1) * (1.0 - req.alpha)))
+            if k > active_cal.n_calibration:
+                active_cal.q_hat = float("inf")
+            else:
+                active_cal.q_hat = float(active_cal.calibration_scores[k - 1])
         else:
             active_cal = calibrator
     else:
