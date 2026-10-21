@@ -392,9 +392,12 @@ class TestMilestone3Conformal:
         assert math.isinf(q_inf), f"Expected inf for k > n, got {q_inf}"
 
     def test_multi_seed_empirical_coverage(self):
-        """Verify valid empirical coverage >= 1 - alpha across multiple independent seeds."""
+        """Verify empirical coverage, set size, and singleton efficiency across multiple seeds."""
         coverages = []
+        set_sizes = []
+        singleton_rates = []
         alpha = 0.10
+
         for seed in [10, 42, 99, 123, 777]:
             rng = np.random.RandomState(seed)
             y = rng.binomial(1, 0.5, size=600)
@@ -407,10 +410,72 @@ class TestMilestone3Conformal:
             cal = SplitConformalCalibrator(nominal_error_rate=alpha)
             cal.calibrate(probs[:300], y[:300])
             eval_res = cal.evaluate(probs[300:], y[300:])
+
+            # Verify finite-sample coverage per seed
+            assert eval_res["empirical_coverage"] >= 0.85, (
+                f"Seed {seed} coverage {eval_res['empirical_coverage']} violated nominal 90%"
+            )
+            assert 1.0 <= eval_res["avg_set_size"] <= 2.0
+            assert eval_res["singleton_rate"] > 0.50
+
             coverages.append(eval_res["empirical_coverage"])
+            set_sizes.append(eval_res["avg_set_size"])
+            singleton_rates.append(eval_res["singleton_rate"])
 
         mean_cov = float(np.mean(coverages))
         assert mean_cov >= 1.0 - alpha, f"Mean empirical coverage {mean_cov:.3f} fell below {1.0 - alpha}"
+
+    def test_controlled_distribution_shift_degradation(self):
+        """Under severe covariate/instrument shift (exchangeability violation), prediction sets adapt."""
+        alpha = 0.05
+        rng = np.random.RandomState(42)
+
+        # In-distribution calibration population: high SNR, well-separated
+        n_cal = 400
+        y_cal = rng.binomial(1, 0.5, size=n_cal)
+        cal_probs = np.zeros((n_cal, 2))
+        for i in range(n_cal):
+            p1 = rng.beta(8.0, 1.2) if y_cal[i] == 1 else rng.beta(1.2, 8.0)
+            cal_probs[i, 1] = p1
+            cal_probs[i, 0] = 1.0 - p1
+
+        cal = SplitConformalCalibrator(nominal_error_rate=alpha)
+        cal.calibrate(cal_probs, y_cal)
+
+        # OOD / shifted test population: degraded SNR, heavily confused model
+        n_test = 400
+        y_test = rng.binomial(1, 0.5, size=n_test)
+        ood_probs = np.zeros((n_test, 2))
+        for i in range(n_test):
+            # Model output degraded to near-random guessing around 0.5
+            p1 = rng.uniform(0.35, 0.65)
+            ood_probs[i, 1] = p1
+            ood_probs[i, 0] = 1.0 - p1
+
+        eval_ood = cal.evaluate(ood_probs, y_test)
+        # Because calibration threshold was sharp (calibrated on high confidence),
+        # testing on shifted uncertain data triggers significant ambiguous sets or drops singleton rate
+        assert eval_ood["singleton_rate"] < 0.60, "Model should flag ambiguous sets under heavy shift"
+
+    def test_infinity_sentinel_produces_conservative_full_sets(self):
+        """When calibration sample size cannot guarantee nominal error, q_hat evaluates to Infinity."""
+        cal = SplitConformalCalibrator(nominal_error_rate=0.01)
+        # With n=10, ceil(11 * 0.99) = 11 > 10 => q_hat = inf
+        probs = np.tile([0.5, 0.5], (10, 1))
+        labels = np.ones(10, dtype=int)
+        q = cal.calibrate(probs, labels)
+        assert math.isinf(q)
+
+        test_probs = np.array([[0.01, 0.99], [0.99, 0.01]])
+        pred_sets = cal.predict_set(test_probs)
+        for ps in pred_sets:
+            # Full set to conservatively preserve coverage
+            assert set(ps.prediction_set) == {"FALSE_POSITIVE", "PLANET"}
+            assert ps.is_singleton is False
+            assert ps.set_size == 2
+            d = ps.to_dict()
+            assert d["quantile_threshold"] == "Infinity"
+
 
 
 
