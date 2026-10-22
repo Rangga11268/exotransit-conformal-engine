@@ -88,7 +88,7 @@ Evaluated on Python 3.12 (Native CPU, Windows 11 AMD64, 50 trials with 10 warmup
 | **ML Pipeline Latency (P99)** | **14.41 ms** | $< 20.0$ ms on standard x86_64 CPU | Detrending + folding + feature extractor + LightGBM + conformal |
 | **Full Pipeline Latency (P50)** | **589.36 ms** | $< 1,000$ ms on 1,470-pt light curve | Including full 1,000-trial BLS periodogram scan |
 | **Model Footprint** | **<200 KB Model (<25 MB RAM)** | $< 50$ MB RAM | LightGBM CPU Booster (Zero PyTorch/CUDA runtime) |
-| **Automated Test Suite** | **37 / 37 Passed (100%)** | 100% Pass Rate | `pytest tests/` (conformal validation, persistence, BLS, API) |
+| **Automated Test Suite** | **39 / 39 Passed (100%)** | 100% Pass Rate | `pytest tests/` (conformal validation, persistence, BLS, API) |
 
 ### 🔬 Multi-Seed Finite-Sample Coverage Benchmark ($S = 10$ Seeds)
 

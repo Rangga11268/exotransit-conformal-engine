@@ -476,6 +476,80 @@ class TestMilestone3Conformal:
             d = ps.to_dict()
             assert d["quantile_threshold"] == "Infinity"
 
+    def test_multi_seed_uncertainty_intervals_and_efficiency(self):
+        """Evaluate coverage across S=20 seeds reporting empirical confidence bounds and efficiency trade-offs."""
+        alpha = 0.10
+        target_coverage = 1.0 - alpha
+        coverages = []
+        set_sizes = []
+        singleton_rates = []
+
+        for seed in range(20):
+            rng = np.random.RandomState(seed + 1000)
+            n_samples = 500
+            y = rng.binomial(1, 0.5, size=n_samples)
+            probs = np.zeros((n_samples, 2))
+            for i in range(n_samples):
+                p1 = rng.beta(6.0, 1.8) if y[i] == 1 else rng.beta(1.8, 6.0)
+                probs[i, 1] = p1
+                probs[i, 0] = 1.0 - p1
+
+            cal = SplitConformalCalibrator(nominal_error_rate=alpha)
+            cal.calibrate(probs[:250], y[:250])
+            eval_res = cal.evaluate(probs[250:], y[250:])
+
+            coverages.append(eval_res["empirical_coverage"])
+            set_sizes.append(eval_res["avg_set_size"])
+            singleton_rates.append(eval_res["singleton_rate"])
+
+        cov_mean = float(np.mean(coverages))
+        cov_std = float(np.std(coverages))
+        cov_se = cov_std / np.sqrt(len(coverages))
+        # 95% CI: mean +/- 1.96 * SE
+        ci_lower = cov_mean - 1.96 * cov_se
+        ci_upper = cov_mean + 1.96 * cov_se
+
+        avg_set_size_mean = float(np.mean(set_sizes))
+        avg_singleton_rate = float(np.mean(singleton_rates))
+
+        # 1. Coverage validity: mean coverage achieves target 90%
+        assert cov_mean >= target_coverage - 0.015, f"Mean coverage {cov_mean:.4f} too low"
+        # 2. Efficiency guarantee: set size is strictly bounded, proving non-vacuous predictions
+        assert avg_set_size_mean <= 1.35, f"Set size too wide: {avg_set_size_mean:.3f}"
+        assert avg_singleton_rate >= 0.70, f"Singleton rate too low: {avg_singleton_rate:.3f}"
+
+    def test_multi_regime_noise_comparison(self):
+        """Test conformal calibration behavior across Low, Moderate, and High photometric noise regimes."""
+        alpha = 0.10
+        regimes = {
+            "low_noise_bright_star": {"alpha_p": 9.0, "beta_p": 1.2, "expected_min_singleton": 0.85},
+            "moderate_noise_standard": {"alpha_p": 5.0, "beta_p": 2.0, "expected_min_singleton": 0.60},
+            "high_noise_faint_star": {"alpha_p": 2.5, "beta_p": 2.0, "expected_min_singleton": 0.20},
+        }
+
+        rng = np.random.RandomState(42)
+
+        for name, params in regimes.items():
+            n = 600
+            y = rng.binomial(1, 0.5, size=n)
+            probs = np.zeros((n, 2))
+            for i in range(n):
+                p1 = rng.beta(params["alpha_p"], params["beta_p"]) if y[i] == 1 else rng.beta(params["beta_p"], params["alpha_p"])
+                probs[i, 1] = p1
+                probs[i, 0] = 1.0 - p1
+
+            cal = SplitConformalCalibrator(nominal_error_rate=alpha)
+            cal.calibrate(probs[:300], y[:300])
+            eval_res = cal.evaluate(probs[300:], y[300:])
+
+            # Coverage MUST hold across all noise regimes due to distribution-free validity
+            assert eval_res["empirical_coverage"] >= 0.88, f"Regime {name} coverage broke: {eval_res['empirical_coverage']}"
+            # Efficiency adapts: sharper models yield higher singleton rates
+            assert eval_res["singleton_rate"] >= params["expected_min_singleton"], (
+                f"Regime {name} singleton rate {eval_res['singleton_rate']:.3f} below expected {params['expected_min_singleton']}"
+            )
+
+
 
 
 
